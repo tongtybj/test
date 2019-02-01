@@ -26,9 +26,9 @@
               $(find cartographer_ros_pr2)/configuration_files
           -configuration_basename pr2_3d.lua"
       output="screen">
-    <remap from="scan_1" to="/tilt_scan" />
-    <remap from="scan_2" to="/base_scan" />
-    <remap from="imu" to="/torso_lift_imu/data" />
+    <remap from="scan_1" to="/base_scan" />
+    <remap from="scan_2" to="/tilt_scan" />
+    <remap from="points2" to="/wide_stereo/points2" />
   </node>
 
   <node name="tf_remove_frames" pkg="cartographer_ros"
@@ -39,6 +39,10 @@
       - odom_combined
     </rosparam>
   </node>
+
+  <node name="add_gravity_to_imu" pkg="cartographer_ros_pr2" type="pr2_imu_with_gravity.py" />
+
+  <node name="reset_arm" pkg="cartographer_ros_pr2" type="reset_arm.py" />
 
   <node name="rviz" pkg="rviz" type="rviz" required="true"
       args="-d $(find cartographer_ros)/configuration_files/demo_3d.rviz" />

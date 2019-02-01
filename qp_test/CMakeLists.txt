@@ -28,7 +28,6 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR}/osqp/osqp/include)
 add_subdirectory(osqp-eigen)
 link_directories(${CMAKE_CURRENT_BINARY_DIR}/osqp-eigen/osqp-eigen/build)
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/osqp-eigen/osqp-eigen/include)
-message(WARNING "${CMAKE_CURRENT_BINARY_DIR}")
 
 ###################################
 ## catkin specific configuration ##
