@@ -28,3 +28,13 @@ $ roslaunch cartographer_ros_pr2 cartographer_pr2_2d.launch
 ```
 $ roslaunch cartographer_ros_pr2 cartographer_pr2_3d.launch
 ```
+
+### Uasage for sensor units
+
+#### case1: velodyne HDL-32e + original IMU board (spinal) with hand movement:
+##### preparation1: connect velodyne HDL-32e to host PC via Ethernet cable (following [wiliki](http://www.jsk.t.u-tokyo.ac.jp/wiliki/wiliki.cgi?Velodyne_Laser_Setting))
+##### preparation2: connect spinal IMU board to host PC via USB cable (do imu calibration if necessary)
+##### command:
+```
+$ roslaunch velodyne_spinal_hand.launch headless:=false
+```
