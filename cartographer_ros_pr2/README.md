@@ -8,7 +8,7 @@ Obtain the latest cartographer from [here](https://google-cartographer-ros.readt
 
 #### 1. bringup pr2 in gazebo
 ```
-$ roslaunch pr2_gazebo pr2_wg_world.launch
+$ roslaunch cartographer_ros_pr2 pr2_wg_world.launch
 ```
 #### 2. start laser tiling control
 ```
