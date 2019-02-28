@@ -13,21 +13,67 @@ find_package(catkin REQUIRED COMPONENTS
 
 find_package(Eigen3 REQUIRED)
 
+include(ExternalProject)
+
+set(QPOASES_INSTALL_DIR ${PROJECT_SOURCE_DIR}/qpoases)
 # QP OASES
-add_subdirectory(qpOASES)
-link_directories(${CMAKE_CURRENT_BINARY_DIR}/qpOASES/qpOASES-3.0/bin)
-include_directories(${CMAKE_CURRENT_BINARY_DIR}/qpOASES/qpOASES-3.0/include)
-add_definitions(-DUSE_QPOASES)
+ExternalProject_Add(qpoases
+  SVN_REPOSITORY https://projects.coin-or.org/svn/qpOASES/stable/3.1
+  SVN_TRUST_CERT 1
+  CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${QPOASES_INSTALL_DIR}
+  TIMEOUT 30
+  PATCH_COMMAND patch -s -p0 < ${PROJECT_SOURCE_DIR}/patch/qpoases.patch
+  CMAKE_ARGS -DCMAKE_BUILD_TYPE=Release
+  BUILD_COMMAND make
+  BUILD_IN_SOURCE 1
+  INSTALL_COMMAND make install
+  LOG_DOWNLOAD ON
+  LOG_CONFIGURE ON
+  LOG_BUILD ON
+  )
+include_directories(${QPOASES_INSTALL_DIR}/include)
+link_directories(${QPOASES_INSTALL_DIR}/lib)
 
-# OSQP + OSQP-eigen
-add_subdirectory(osqp)
-link_directories(${CMAKE_CURRENT_BINARY_DIR}/osqp/osqp/build/out)
-include_directories(${CMAKE_CURRENT_BINARY_DIR}/osqp/osqp/include)
+## Alternative Method
+#ExternalProject_Get_Property(qpoases SOURCE_DIR)
+#include_directories(${SOURCE_DIR}/include)
+#link_directories(${SOURCE_DIR}/libs)
 
-#add_subdirectory(osqp-eigen)
-add_subdirectory(osqp-eigen)
-link_directories(${CMAKE_CURRENT_BINARY_DIR}/osqp-eigen/osqp-eigen/build)
-include_directories(${CMAKE_CURRENT_BINARY_DIR}/osqp-eigen/osqp-eigen/include)
+set(OSQP_INSTALL_DIR ${PROJECT_SOURCE_DIR}/osqp)
+# QP OASES
+ExternalProject_Add(OSQP
+  DOWNLOAD_COMMAND git clone --recursive https://github.com/oxfordcontrol/osqp OSQP
+  CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${OSQP_INSTALL_DIR}
+  TIMEOUT 30
+  CMAKE_ARGS -DCMAKE_BUILD_TYPE=Release
+  BUILD_COMMAND make
+  BUILD_IN_SOURCE 1
+  INSTALL_COMMAND ""
+  INSTALL_COMMAND make install
+  LOG_DOWNLOAD ON
+  LOG_CONFIGURE ON
+  LOG_BUILD ON
+  )
+include_directories(${OSQP_INSTALL_DIR}/include/osqp)
+link_directories(${OSQP_INSTALL_DIR}/lib)
+
+set(OSQP_EIGEN_INSTALL_DIR ${PROJECT_SOURCE_DIR}/osqp_eigen)
+# QP OASES
+ExternalProject_Add(osqpeigen
+  DEPENDS OSQP
+  GIT_REPOSITORY https://github.com/robotology/osqp-eigen.git
+  CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${OSQP_EIGEN_INSTALL_DIR} -DCMAKE_PROJECT_OsqpEigen_INCLUDE=${OSQP_INSTALL_DIR}/osqp_path.cmake
+  TIMEOUT 30
+  PATCH_COMMAND patch -s -p0 < ${PROJECT_SOURCE_DIR}/patch/osqp_eigen.patch
+  BUILD_COMMAND make
+  BUILD_IN_SOURCE 1
+  INSTALL_COMMAND make install
+  LOG_DOWNLOAD ON
+  LOG_CONFIGURE ON
+  LOG_BUILD ON
+  )
+include_directories(${OSQP_EIGEN_INSTALL_DIR}/include)
+link_directories(${OSQP_EIGEN_INSTALL_DIR}/lib)
 
 ###################################
 ## catkin specific configuration ##
@@ -52,13 +98,14 @@ include_directories(
 )
 
 
-
 ## Declare a C++ library
-add_executable(mpc_example_osqp src/mpc_example_osqp.cpp)
-target_link_libraries(mpc_example_osqp OsqpEigen osqp)
 add_executable(mpc_example_qpoases src/mpc_example_qpoases.cpp)
 target_link_libraries(mpc_example_qpoases qpOASES)
+add_dependencies(mpc_example_qpoases qpoases)
 
+add_executable(mpc_example_osqp src/mpc_example_osqp.cpp)
+target_link_libraries(mpc_example_osqp osqp OsqpEigen)
+add_dependencies(mpc_example_osqp OSQP osqpeigen)
 
 #############
 ## Install ##

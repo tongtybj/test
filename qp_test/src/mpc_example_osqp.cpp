@@ -7,7 +7,7 @@
 
 
 // osqp-eigen
-#include <OsqpEigen.h>
+#include <OsqpEigen/OsqpEigen.h>
 
 #include <chrono>
 
