@@ -1,0 +1,33 @@
+<launch>
+
+  <arg name="headless" default="false" />
+  <arg name="load_state_filename" />
+
+  <param name="/use_sim_time" value="true" />
+  <!-- robot (sensor unit) kinematics model -->
+  <param name="robot_description"
+         command="$(find xacro)/xacro.py '$(find cartographer_ros_pr2)/urdf/velodyne_hdl32e_spinal.urdf.xacro'" />
+  <node name="robot_state_publisher" pkg="robot_state_publisher"  type="robot_state_publisher" />
+
+  <!-- cartographer -->
+  <node name="cartographer_node" pkg="cartographer_ros"
+        type="cartographer_node"
+        args="
+              -configuration_directory $(find cartographer_ros_pr2)/configuration_files
+              -configuration_basename velodyne_spinal.lua
+              -load_state_filename $(arg load_state_filename)"
+        output="screen">
+    <remap from="points2" to="/velodyne_points" />
+    <remap from="imu" to="/ros_imu"/>
+  </node>
+
+  <group unless="$(arg headless)" >
+    <node name="cartographer_occupancy_grid_node" pkg="cartographer_ros"
+          type="cartographer_occupancy_grid_node" args="-resolution 0.05" />
+
+    <node name="rviz" pkg="rviz" type="rviz" required="true"
+          args="-d $(find cartographer_ros_pr2)/configuration_files/demo_3d.rviz" />
+  </group>
+
+
+</launch>

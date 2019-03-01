@@ -26,15 +26,6 @@
     <remap from="scan" to="/base_scan" />
   </node>
 
-  <node name="tf_remove_frames" pkg="cartographer_ros"
-      type="tf_remove_frames.py">
-    <remap from="tf_out" to="/tf" />
-    <rosparam param="remove_frames">
-      - map
-      - odom_combined
-    </rosparam>
-  </node>
-
   <node name="rviz" pkg="rviz" type="rviz" required="true"
       args="-d $(find cartographer_ros)/configuration_files/demo_2d.rviz" />
 </launch>

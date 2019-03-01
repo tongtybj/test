@@ -15,7 +15,13 @@
 -->
 
 <launch>
-  <param name="/use_sim_time" value="true" />
+  <arg name="simulation" default="false" />
+  <arg name="offline" default="false" />
+  <arg name="bag_filename" default="" />
+
+  <param name="/use_sim_time" value="true" if="$(eval arg('simulation') + arg('offline') > 0)" />
+  <arg name="configuration_file" value="pr2_3d_only_laser_simulation.lua" if="$(arg simulation)" />
+  <arg name="configuration_file" value="pr2_3d_only_laser_realmachine.lua" unless="$(arg simulation)" />
 
   <!-- relay the combined odom from robot_ekf to nav_msgs/Odometry -->
   <node name="pr2_odom_relay" pkg="cartographer_ros_pr2" type="pr2_odom.py" />
@@ -24,26 +30,48 @@
       type="cartographer_node" args="
           -configuration_directory
               $(find cartographer_ros_pr2)/configuration_files
-          -configuration_basename pr2_3d.lua"
+          -configuration_basename $(arg configuration_file)"
       output="screen">
     <remap from="scan_1" to="/base_scan" />
     <remap from="scan_2" to="/tilt_scan" />
     <remap from="points2" to="/wide_stereo/points2" />
+    <remap from="imu" to="/torso_lift_imu/data" unless="$(arg simulation)"/>
   </node>
 
-  <node name="tf_remove_frames" pkg="cartographer_ros"
-      type="tf_remove_frames.py">
-    <remap from="tf_out" to="/tf" />
-    <rosparam param="remove_frames">
-      - map
-      - odom_combined
-    </rosparam>
-  </node>
+  <group if="$(arg simulation)">
+    <node name="add_gravity_to_imu" pkg="cartographer_ros_pr2" type="pr2_imu_with_gravity.py" />
+    <node name="reset_arm" pkg="cartographer_ros_pr2" type="reset_arm.py" />
+  </group>
 
-  <node name="add_gravity_to_imu" pkg="cartographer_ros_pr2" type="pr2_imu_with_gravity.py" />
-
-  <node name="reset_arm" pkg="cartographer_ros_pr2" type="reset_arm.py" />
 
   <node name="rviz" pkg="rviz" type="rviz" required="true"
-      args="-d $(find cartographer_ros)/configuration_files/demo_3d.rviz" />
+        args="-d $(find cartographer_ros)/configuration_files/demo_3d.rviz" />
+
+  <group if="$(arg offline)">
+    <param name="robot_description" command="$(find xacro)/xacro '$(find pr2_description)/robots/pr2.urdf.xacro' --inorder " />
+
+    <node name="$(anon map_server00)" pkg="map_server" type="map_server"
+          args="$(find jsk_maps)/raw_maps/eng2-7f-0.05.yaml" >
+    </node>
+
+    <node name="tf_remove_frames" pkg="cartographer_ros" type="tf_remove_frames.py">
+      <remap from="tf_out" to="/tf" />
+      <rosparam param="remove_frames">
+        - cartographer_map
+      </rosparam>
+    </node>
+
+    <node name="playbag" pkg="rosbag" type="play"
+          args="--clock $(arg bag_filename)" if="$(arg offline)">
+      <remap from="tf" to="tf_in" />
+    </node>
+
+
+    <arg name="map_offset_x" default="0" />
+    <arg name="map_offset_y" default="0" />
+    <arg name="map_offset_yaw" default="0" />
+    <node name="static_transform_publisher" pkg="tf" type="static_transform_publisher"
+          args="$(arg map_offset_x) $(arg map_offset_y) 0 $(arg map_offset_yaw) 0 0 /map /cartographer_map 50" />
+
+  </group>
 </launch>
