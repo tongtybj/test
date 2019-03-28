@@ -1,0 +1,58 @@
+<launch>
+  <arg name="headless" default="false" />
+
+  <arg name="record" default="false" />
+  <arg name="offline" default="false" />
+
+  <param name="/use_sim_time" value="true" if="$(arg offline)"/>
+
+  <group unless="$(arg offline)">
+    <!-- zed  -->
+    <node pkg="nodelet" type="nodelet" name="zed_nodelet_manager"
+          args="manager" output="screen"/>
+
+    <include file="$(find zed_wrapper)/launch/zed_camera_nodelet.launch" >
+      <arg name="camera_model" value= "1" /> <!-- 0=ZED, 1=ZEDM-->
+      <arg name="resolution"  value= "2" />
+      <arg name="frame_rate"  value= "30" />
+      <arg name="publish_tf"  value="false" />
+      <arg name="publish_map_tf" value="false" />
+      <arg name="imu_frame"  value="zed_camera_center" /> <!-- only used with ZED M -->
+    </include>
+    <param name = "/ZED_nodelet/imu_pub_rate" value = "200" />
+    <param name = "/ZED_nodelet/imu_timestamp_sync" value = "false" />
+
+    <node pkg="nodelet" type="nodelet"
+          name="point_cloud_throttle"
+          args="load jsk_topic_tools/LightweightThrottle zed_nodelet_manager"
+          output="screen">
+      <remap from="~input" to="/point_cloud/cloud_registered" />
+      <remap from="~output" to="/point_cloud/cloud_registered_throttle" />
+      <param name="update_rate" value="4" />
+    </node>
+
+  </group>
+
+  <!-- cartographer -->
+  <group unless="$(arg record)">
+    <node name="cartographer_node" pkg="cartographer_ros"
+          type="cartographer_node" args="
+                                         -configuration_directory $(find cartographer_ros_pr2)/configuration_files
+                                         -configuration_basename zed_stereo.lua"
+          output="screen">
+      <remap from="points2" to="/point_cloud/cloud_registered_throttle" />
+      <remap from="imu" to="/imu/data"/>
+      <remap from="odom" to="/odom"/>
+    </node>
+
+    <group unless="$(arg headless)" >
+      <node name="cartographer_occupancy_grid_node" pkg="cartographer_ros"
+            type="cartographer_occupancy_grid_node" args="-resolution 0.05" />
+
+
+      <node name="rviz" pkg="rviz" type="rviz" required="true"
+            args="-d $(find cartographer_ros_pr2)/configuration_files/demo_3d.rviz" />
+    </group>
+    </group>
+
+</launch>
