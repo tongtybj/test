@@ -64,14 +64,14 @@ $ roslaunch velodyne_spinal_hand.launch headless:=false
 - note2: spinal IMU board to host PC via USB cable (do imu calibration if necessary)
 
 ```
-$ roslaunch velodyne_spinal_hand.launch record:=true
+$ roslaunch cartographer_ros_pr2 velodyne_spinal_hand.launch record:=true
 $ rosrun cartographer_ros_pr2 velodyne_spinal_hand_d.sh
 ```
 
 #### command for offline slam using rosbag
 **note**: download [2019-03-01-velodyne_imu_usb_cam_eng8-2-3.bag](https://drive.google.com/open?id=1VUbnJ_ThCOZqkMFWXVQaeDXbSkyE0ZZD)
 ```
-$ roslaunch velodyne_spinal_hand.launch offline:=true
+$ roslaunch cartographer_ros_pr2 velodyne_spinal_hand.launch offline:=true
 $ rosbag play ${HOME}/2019-03-01-velodyne_imu_usb_cam_eng8-2-3.bag --clock
 ```
 
