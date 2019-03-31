@@ -50,9 +50,13 @@
   <!--   <doc_depend>doxygen</doc_depend> -->
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>cartographer_ros</build_depend>
-  <build_export_depend>cartographer_ros</build_export_depend>
-  <exec_depend>cartographer_ros</exec_depend>
+  <build_depend>tf_conversions</build_depend>
 
+  <build_export_depend>cartographer_ros</build_export_depend>
+  <build_export_depend>tf_conversions</build_export_depend>
+
+  <exec_depend>cartographer_ros</exec_depend>
+  <exec_depend>tf_conversions</exec_depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>

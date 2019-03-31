@@ -44,7 +44,7 @@ $ roslaunch cartographer_ros_pr2 cartographer_pr2_3d.launch
 #### offline slam
 **note**: download [2019-03-01-pr2-eng2-7th.bag](https://drive.google.com/open?id=1-LhhKQPMewhWWOiqEeyQKjcUvF2lkUQu)
 ```
-$ roslaunch cartographer_ros_pr2  cartographer_pr2_3d.launch offline:=true bag_filename:=${HOME}/2019-03-01-pr2-eng2-7th.bag map_offset_x:=5 map_offset_y:=5.5 map_offset_yaw:=2.35
+$ roslaunch cartographer_ros_pr2  cartographer_pr2_3d.launch offline:=true bag_filename:=${HOME}/Downloads/2019-03-01-pr2-eng2-7th.bag map_offset_x:=5 map_offset_y:=5.5 map_offset_yaw:=2.35
 ```
 
 ## Usage with sensor units
@@ -72,14 +72,24 @@ $ rosrun cartographer_ros_pr2 velodyne_spinal_hand_d.sh
 **note**: download [2019-03-01-velodyne_imu_usb_cam_eng8-2-3.bag](https://drive.google.com/open?id=1VUbnJ_ThCOZqkMFWXVQaeDXbSkyE0ZZD)
 ```
 $ roslaunch cartographer_ros_pr2 velodyne_spinal_hand.launch offline:=true
-$ rosbag play ${HOME}/2019-03-01-velodyne_imu_usb_cam_eng8-2-3.bag --clock
+$ rosbag play ${HOME}/Downloads/2019-03-01-velodyne_imu_usb_cam_eng8-2-3.bag --clock
 ```
 
-#### pure localization
+#### pure localization (set initial pose from commandline)
 **note**: downlaod [2019-03-01-velodyne_imu_usb_cam_eng2-8.bag](https://drive.google.com/open?id=1POLUDcSHjsPxg8YRwZgCt8WuiFKMkx98) and [velodyne-imu-eng8-2-3.pbstream](https://drive.google.com/open?id=1mPGdI8nq-nxTepCWD_NEAEHXTB97ENXp)
 ```
- $ roslaunch cartographer_ros_pr2 velodyne_spinal_pure_localization.launch load_state_filename:=${HOME}/velodyne-imu-eng8-2-3.pbstream
- $ roslaunch velodyne_spinal_initial_pose.launch init_x:=-5.2 init_y:=-62.6 init_z:=-5 init_roll:=0.1 init_pitch:=0.1 init_yaw:=-0.2
+ $ roslaunch cartographer_ros_pr2 velodyne_spinal_pure_localization.launch load_state_filename:=${HOME}/Downloads/velodyne-imu-eng8-2-3.pbstream
+ $ roslaunch cartographer_ros_pr2 velodyne_spinal_initial_pose.launch init_x:=-5.2 init_y:=-62.6 init_z:=-5 init_roll:=0.1 init_pitch:=0.1 init_yaw:=-0.2
  $ rosservice call /finish_trajectory "trajectory_id: 1"
- $ rosbag play ${HOME}/2019-03-01-velodyne_imu_usb_cam_eng2-8.bag --clock
+ $ rosbag play ${HOME}/Downloads/2019-03-01-velodyne_imu_usb_cam_eng2-8.bag --clock
+```
+#### pure localization (set initial pose from rviz)
+```
+ $ roslaunch cartographer_ros_pr2 velodyne_spinal_pure_localization.launch load_state_filename:=${HOME}/Downloads/velodyne-imu-eng8-2-3.pbstream
+ $ roslaunch cartographer_ros_pr2 set_initpose.launch pbstream_filename:=${HOME}/Downloads/velodyne-imu-eng8-2-3.pbstream
+```
+**note**: set the initial pose from rviz using `2D Pose Estimate`
+```
+ $ rosservice call /finish_trajectory "trajectory_id: 1"
+ $ rosbag play ${HOME}/Downloads/2019-03-01-velodyne_imu_usb_cam_eng2-8.bag --clock
 ```
