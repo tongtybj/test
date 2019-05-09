@@ -51,7 +51,7 @@
 
 
       <node name="rviz" pkg="rviz" type="rviz" required="true"
-            args="-d $(find cartographer_ros_pr2)/configuration_files/demo_3d.rviz" />
+            args="-d $(find cartographer_ros_pr2)/configuration_files/velodyne_spinal.rviz" />
     </group>
   </group>
 </launch>

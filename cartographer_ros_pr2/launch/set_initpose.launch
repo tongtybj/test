@@ -7,7 +7,7 @@
 
   <node name="set_initpose" pkg="cartographer_ros_pr2" type="initpose_node" output="screen"
         args="-configuration_directory $(find cartographer_ros_pr2)/configuration_files
-              -configuration_basename velodyne_spinal.lua
+              -configuration_basename velodyne_spinal_localization.lua
               -pbstream_filename $(arg pbstream_filename)" >
 
     <param name ="initpose_frame_name" value ="$(arg initpose_frame_name)"/>
