@@ -2,9 +2,18 @@
 Test of SLAM based on [Cartographer](https://github.com/googlecartographer) for PR2
 
 ## Install cartgrapher
-Obtain the latest cartographer from [here](https://google-cartographer-ros.readthedocs.io/en/latest/compilation.html)
+Obtain the latest cartographer from [here](https://google-cartographer-ros.readthedocs.io/en/latest/compilation.html).
 
-## Dataset URL: https://drive.google.com/drive/folders/1iuQvsW0FCaBXpoltxpyVablFweW_NsLd 
+
+### version requirement
+- cartographer: `master` (**note**: please checkout to `master` branch (not `v1.0.0`))
+- cartographer_ros: [`tongtybj:set_initpose_from_rviz`](https://github.com/tongtybj/cartographer_ros/tree/set_initpose_from_rviz)  (opening PR [#1284](https://github.com/googlecartographer/cartographer_ros/pull/1284))
+- ceres-solver: `v1.13.0`
+
+### protobuf
+**note**: do not execute `src/cartographer/scripts/install_proto3.sh` which is recommended in [here](https://google-cartographer-ros.readthedocs.io/en/latest/compilation.html). Please follow the [this instruction](https://gist.github.com/tongtybj/c5e0cec0160c2194298ee4b5895c3753). 
+
+## Dataset: [URL1](https://drive.google.com/drive/folders/1iuQvsW0FCaBXpoltxpyVablFweW_NsLd), [URL2](https://drive.google.com/open?id=1F3-dNg1OLLCZD30C0u_Kt1BXGl_AhBsT)
 
 ## Usage with PR2
 
@@ -65,7 +74,7 @@ $ roslaunch velodyne_spinal_hand.launch headless:=false
 
 ```
 $ roslaunch cartographer_ros_pr2 velodyne_spinal_hand.launch record:=true
-$ rosrun cartographer_ros_pr2 velodyne_spinal_hand_d.sh
+$ rosrun cartographer_ros_pr2 velodyne_spinal_hand_record.sh
 ```
 
 #### command for offline slam using rosbag
@@ -75,21 +84,22 @@ $ roslaunch cartographer_ros_pr2 velodyne_spinal_hand.launch offline:=true
 $ rosbag play ${HOME}/Downloads/2019-03-01-velodyne_imu_usb_cam_eng8-2-3.bag --clock
 ```
 
-#### pure localization (set initial pose from commandline)
-**note**: downlaod [2019-03-01-velodyne_imu_usb_cam_eng2-8.bag](https://drive.google.com/open?id=1POLUDcSHjsPxg8YRwZgCt8WuiFKMkx98) and [velodyne-imu-eng8-2-3.pbstream](https://drive.google.com/open?id=1mPGdI8nq-nxTepCWD_NEAEHXTB97ENXp)
+#### pure localization (set initial pose from rviz, please check [PR #1284](https://github.com/googlecartographer/cartographer_ros/pull/1284))
+
+1. run the pure localization mode: 
 ```
  $ roslaunch cartographer_ros_pr2 velodyne_spinal_pure_localization.launch load_state_filename:=${HOME}/Downloads/velodyne-imu-eng8-2-3.pbstream
- $ roslaunch cartographer_ros_pr2 velodyne_spinal_initial_pose.launch init_x:=-5.2 init_y:=-62.6 init_z:=-5 init_roll:=0.1 init_pitch:=0.1 init_yaw:=-0.2
- $ rosservice call /finish_trajectory "trajectory_id: 1"
+```
+
+2. set the initial pose from rviz using icon `2D Pose Estimate`
+
+3. play a rosbag
+```
  $ rosbag play ${HOME}/Downloads/2019-03-01-velodyne_imu_usb_cam_eng2-8.bag --clock
 ```
-#### pure localization (set initial pose from rviz)
+
+### case2: ZED mini (stereo camera) with hand movement:
+#### command for online slam
 ```
- $ roslaunch cartographer_ros_pr2 velodyne_spinal_pure_localization.launch load_state_filename:=${HOME}/Downloads/velodyne-imu-eng8-2-3.pbstream
- $ roslaunch cartographer_ros_pr2 set_initpose.launch pbstream_filename:=${HOME}/Downloads/velodyne-imu-eng8-2-3.pbstream
-```
-**note**: set the initial pose from rviz using `2D Pose Estimate`
-```
- $ rosservice call /finish_trajectory "trajectory_id: 1"
- $ rosbag play ${HOME}/Downloads/2019-03-01-velodyne_imu_usb_cam_eng2-8.bag --clock
+$ roslaunch cartographer_ros_pr2 zed_stereo.launch
 ```
