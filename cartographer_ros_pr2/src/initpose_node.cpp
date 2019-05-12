@@ -13,46 +13,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <string>
-#include <vector>
 
+
+#include "gflags/gflags.h"
 #include "cartographer/common/configuration_file_resolver.h"
-#include "cartographer/common/lua_parameter_dictionary.h"
-#include "cartographer/common/make_unique.h"
-#include "cartographer/common/port.h"
+#include "cartographer/io/proto_stream.h"
+#include "cartographer/mapping/map_builder.h"
+#include "cartographer_ros/node_options.h"
 #include "cartographer_ros/node_constants.h"
 #include "cartographer_ros/ros_log_sink.h"
-#include "cartographer_ros/trajectory_options.h"
 #include "cartographer_ros_msgs/StartTrajectory.h"
 #include "cartographer_ros_msgs/StatusCode.h"
-#include "cartographer_ros_msgs/TrajectoryOptions.h"
-#include "gflags/gflags.h"
-#include "ros/ros.h"
 
-// ed: header added
-#include <chrono>
-#include <thread>
+
+#include "ros/ros.h"
 #include <std_msgs/String.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
 #include <tf/transform_datatypes.h>
-#include <tf/tf.h>
-#include <tf2/utils.h>
 #include <tf2_ros/transform_listener.h>
 
-#include "cartographer/io/proto_stream.h"
-#include "cartographer_ros/submap.h"
-#include "cartographer/mapping/map_builder_interface.h"
-#include "cartographer/mapping/proto/trajectory_builder_options.pb.h"
-#include "cartographer_ros/msg_conversion.h"
-#include "cartographer/mapping/map_builder.h"
-#include "cartographer_ros/node.h"
-#include "cartographer_ros/node_options.h"
+#include <string>
+#include <vector>
 
-#include <urdf/model.h>
-#include <kdl_parser/kdl_parser.hpp>
-#include <kdl/tree.hpp>
-#include <kdl/treefksolverpos_recursive.hpp>
-#include <tf_conversions/tf_kdl.h>
 
 using namespace std;
 
@@ -63,85 +45,9 @@ DEFINE_string(configuration_directory, "",
 DEFINE_string(configuration_basename, "",
               "Basename, i.e. not containing any directory prefix, of the "
               "configuration file.");
-DEFINE_string(initial_pose, "", "Starting pose of a new trajectory");
+// ed: pbstream filename to get last trajectory's position(x,y,z) value
+DEFINE_string(pbstream_filename, "",  "Filename of a pbstream to draw a map from.");
 
-// ed: pbstream filename to get last trajectory's position(x,y,z) value 
-DEFINE_string(pbstream_filename, "",
-              "Filename of a pbstream to draw a map from.");
-
-namespace cartographer_ros {
-  namespace {
-
-    TrajectoryOptions LoadOptions() {
-      auto file_resolver = cartographer::common::make_unique<
-        cartographer::common::ConfigurationFileResolver>(
-                                                         std::vector<std::string>{FLAGS_configuration_directory});
-
-      const std::string code =
-        file_resolver->GetFileContentOrDie(FLAGS_configuration_basename);
-      auto lua_parameter_dictionary =
-        cartographer::common::LuaParameterDictionary::NonReferenceCounted(
-                                                                          code, std::move(file_resolver));
-
-      // ed: if there is initial_pose value
-      if (!FLAGS_initial_pose.empty()) {
-
-        auto initial_trajectory_pose_file_resolver =
-          cartographer::common::make_unique<
-            cartographer::common::ConfigurationFileResolver>(
-                                                             std::vector<std::string>{FLAGS_configuration_directory});
-
-        auto initial_trajectory_pose =
-          cartographer::common::LuaParameterDictionary::NonReferenceCounted(
-                                                                            "return " + FLAGS_initial_pose,
-                                                                            std::move(initial_trajectory_pose_file_resolver));
-
-        return CreateTrajectoryOptions(lua_parameter_dictionary.get(),
-                                       initial_trajectory_pose.get());
-
-      }
-      else {
-        return CreateTrajectoryOptions(lua_parameter_dictionary.get());
-      }
-    }
-
-
-    bool Run() {
-      ros::NodeHandle node_handle;
-      ros::ServiceClient client =
-        node_handle.serviceClient<cartographer_ros_msgs::StartTrajectory>(
-                                                                          kStartTrajectoryServiceName);
-      cartographer_ros_msgs::StartTrajectory srv;
-      srv.request.options = ToRosMessage(LoadOptions());
-      srv.request.topics.laser_scan_topic = node_handle.resolveName(
-                                                                    kLaserScanTopic, true /* apply topic remapping */);
-      srv.request.topics.multi_echo_laser_scan_topic =
-        node_handle.resolveName(kMultiEchoLaserScanTopic, true);
-      srv.request.topics.point_cloud2_topic =
-        node_handle.resolveName(kPointCloud2Topic, true);
-      srv.request.topics.imu_topic = node_handle.resolveName(kImuTopic, true);
-      srv.request.topics.odometry_topic =
-        node_handle.resolveName(kOdometryTopic, true);
-
-      if (!client.call(srv)) {
-        LOG(ERROR) << "Failed to call " << kStartTrajectoryServiceName << ".";
-        return false;
-      }
-      if (srv.response.status.code != cartographer_ros_msgs::StatusCode::OK) {
-        LOG(ERROR) << "Error starting trajectory - message: '"
-                   << srv.response.status.message
-                   << "' (status code: " << std::to_string(srv.response.status.code)
-                   << ").";
-        return false;
-      }
-      LOG(INFO) << "Started trajectory " << srv.response.trajectory_id;
-      return true;
-    }
-
-
-
-  }  // namespace
-}  // namespace cartographer_ros
 
 // ed: /move_base_simple/goal (2D Nav Goal in Rviz) subscribe callback function
 void move_base_simple_callback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& msg){
@@ -149,7 +55,6 @@ void move_base_simple_callback(const geometry_msgs::PoseWithCovarianceStamped::C
   //TODO: stop the old trajectory
 
   std::cout << "[+] CB : /move_base_simple/goal data received! " << std::endl;
-
 
   /* check the coincidence of frames */
   ::ros::NodeHandle nhp("~");
@@ -177,11 +82,9 @@ void move_base_simple_callback(const geometry_msgs::PoseWithCovarianceStamped::C
   ::cartographer::io::ProtoStreamReader reader(FLAGS_pbstream_filename);
   cartographer_ros::NodeOptions node_options;
   cartographer_ros::TrajectoryOptions trajectory_options;
-  std::tie(node_options, trajectory_options) =
-      cartographer_ros::LoadOptions(FLAGS_configuration_directory, FLAGS_configuration_basename);
-  auto map_builder =
-      cartographer::common::make_unique<cartographer::mapping::MapBuilder>(
-          node_options.map_builder_options);
+
+  std::tie(node_options, trajectory_options) = cartographer_ros::LoadOptions(FLAGS_configuration_directory, FLAGS_configuration_basename);
+  auto map_builder =  absl::make_unique<cartographer::mapping::MapBuilder>(node_options.map_builder_options);
 
   // load pbstream
   map_builder->LoadState(&reader, true);
@@ -237,39 +140,43 @@ void move_base_simple_callback(const geometry_msgs::PoseWithCovarianceStamped::C
 
   int to_trajectory_id = 0;   // ed: offline map's trajectory
 
-  ROS_INFO("init pose w.r.t map: [%f, %f, %f], yaw: %f",
-           map_tf.getOrigin().x(),
-           map_tf.getOrigin().y(),
-           map_tf.getOrigin().z(),
-           tf::getYaw(map_tf.getRotation()));
-
-  ROS_INFO("relative pose: [%f, %f, %f], [%f, %f, %f]",
-           relative_initpose_tf.getOrigin().x(),
-           relative_initpose_tf.getOrigin().y(),
-           relative_initpose_tf.getOrigin().z(),
-           roll, pitch, yaw);
-
-  // ed: pitch isn't used
-  std::string parsed_string ="{to_trajectory_id = "    \
-                             + std::to_string(to_trajectory_id)         \
-                             + ", relative_pose = { translation = { "   \
-                             + std::to_string(relative_initpose_tf.getOrigin().x()) + ", " \
-                             + std::to_string(relative_initpose_tf.getOrigin().y()) + ", " \
-                             + std::to_string(relative_initpose_tf.getOrigin().z()) + \
-                             + "}, rotation = { "\
-                             + std::to_string(roll) + ","       \
-                             + std::to_string(pitch) + ","      \
-                             + std::to_string(yaw) + "}}}";
-
-
-  FLAGS_initial_pose = parsed_string;
-
-  //return;
-
   {
     cartographer_ros::ScopedRosLogSink ros_log_sink;
-    cartographer_ros::Run();
 
+
+    ROS_INFO("init pose w.r.t map: [%f, %f, %f], yaw: %f",
+             map_tf.getOrigin().x(),
+             map_tf.getOrigin().y(),
+             map_tf.getOrigin().z(),
+             tf::getYaw(map_tf.getRotation()));
+
+    ROS_INFO("relative pose: [%f, %f, %f], [%f, %f, %f]",
+             relative_initpose_tf.getOrigin().x(),
+             relative_initpose_tf.getOrigin().y(),
+             relative_initpose_tf.getOrigin().z(),
+             roll, pitch, yaw);
+
+
+    ros::NodeHandle node_handle;
+    ros::ServiceClient client = node_handle.serviceClient<cartographer_ros_msgs::StartTrajectory>(cartographer_ros::kStartTrajectoryServiceName);
+    cartographer_ros_msgs::StartTrajectory srv;
+    srv.request.configuration_directory = FLAGS_configuration_directory;
+    srv.request.configuration_basename = FLAGS_configuration_basename;
+
+    srv.request.relative_to_trajectory_id = to_trajectory_id;
+    srv.request.use_initial_pose = true;
+    tf::poseTFToMsg(relative_initpose_tf, srv.request.initial_pose);
+
+    if (!client.call(srv)) {
+      LOG(ERROR) << "Failed to call " << cartographer_ros::kStartTrajectoryServiceName << ".";
+    }
+    if (srv.response.status.code != cartographer_ros_msgs::StatusCode::OK) {
+      LOG(ERROR) << "Error starting trajectory - message: '"
+                 << srv.response.status.message
+                 << "' (status code: " << std::to_string(srv.response.status.code)
+                 << ").";
+    }
+    LOG(INFO) << "Started trajectory " << srv.response.trajectory_id;
   }
 }
 
@@ -304,7 +211,7 @@ int main(int argc, char** argv) {
   cartographer_ros::NodeOptions node_options;
   cartographer_ros::TrajectoryOptions trajectory_options;
   std::tie(node_options, trajectory_options) = cartographer_ros::LoadOptions(FLAGS_configuration_directory, FLAGS_configuration_basename);
-  auto map_builder = cartographer::common::make_unique<cartographer::mapping::MapBuilder>(node_options.map_builder_options);
+  auto map_builder = absl::make_unique<cartographer::mapping::MapBuilder>(node_options.map_builder_options);
 
   map_builder->LoadState(&reader, true);
   const auto node_poses = map_builder->pose_graph()->GetTrajectoryNodePoses();
