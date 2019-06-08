@@ -103,3 +103,16 @@ $ rosbag play ${HOME}/Downloads/2019-03-01-velodyne_imu_usb_cam_eng8-2-3.bag --c
 ```
 $ roslaunch cartographer_ros_pr2 zed_stereo.launch
 ```
+
+## robot_localization
+
+### try imu + mocap mode (not good, should tune the parameters)
+1. Download [uav-mocap-imu1.bag](https://drive.google.com/open?id=1bveirX7veO5DoAHKDH1KnEMlPZ3JhHkY), [uav-mocap-imu2.bag](https://drive.google.com/open?id=1AS1oUwWz0DoK-e5U_WHI1B-j4vPNt8NC) and play the rosbag.
+
+2. Try following command:
+```
+$ roslaunch cartographer_ros_pr2 robot_localization_imu_mocap.launch
+```
+3. echo the topic `/odometry/filtered`
+
+### you can also try the [raw rosbag](https://drive.google.com/open?id=1Letvd4YwqJFk_N3lmCPp2lk8ATIiEeAb), but need to install [aerial_robot](https://github.com/tongtybj/aerial_robot).

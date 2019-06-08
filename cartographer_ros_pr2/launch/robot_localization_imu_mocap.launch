@@ -1,0 +1,19 @@
+<launch>
+
+  <arg name="use_sim_time" default="true" />
+  <param name="use_sim_time" value="$(arg use_sim_time)" />
+
+  <arg name="convert" default="false" />
+  <group if="$(arg convert)">
+    <node pkg="cartographer_ros_pr2" type="spinal_imu_converter.py" name="imu_converter">
+    </node>
+    <node pkg="cartographer_ros_pr2" type="mocap_pose_converter.py" name="mocap_converter">
+    </node>
+  </group>
+
+  <node pkg="robot_localization" type="ekf_localization_node" name="ekf_se" clear_params="true">
+    <rosparam command="load" file="$(find cartographer_ros_pr2)/configuration_files/robot_localization_imu_mocap.yaml" />
+    <param name="reset_on_time_jump" value="true"/>
+  </node>
+
+</launch>
