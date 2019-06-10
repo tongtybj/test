@@ -105,3 +105,47 @@ $ rosbag play ${HOME}/Downloads/2019-03-01-velodyne_imu_usb_cam_eng8-2-3.bag --c
 ```
 $ roslaunch cartographer_ros_pr2 zed_stereo.launch
 ```
+
+## Usage with turtlebot
+
+### 2D mode (kinect ) in gazebo
+
+#### slam + navigation
+
+```
+$ roslaunch cartographer_ros_pr2 turtlebot_depth_camera_2d_gazebo.launch
+```
+
+**note**: you can also use "2D Nav Goal" icon in Rviz to perform navigation in gazebo world.
+
+#### localization mode + navigation
+
+**note1**: you have to first create the .pbstream (map) file from aforementioned slam mode, or you can download [turtlebot_gazebo.pbstream](https://drive.google.com/open?id=1hABP6CYYyfUi67tcLEtS_j0XXljleJ5s), [turtlebot_gazebo2.pbstream](https://drive.google.com/open?id=1ahKHNuF4H2wzDMrXKOdIASHE8v07XEch)
+
+```
+$ roslaunch cartographer_ros_pr2 turtlebot_depth_camera_2d_gazebo.launch localization_mode:=true load_state_filename:=${HOME}/Downloads/turtlebot_gazebo2.pbstream
+```
+
+**note2**:  use "2D Pose Estimate" icon in Rviz to set the initial 2D pos for robot, and can also use "2D Nav Goal" icon in Rviz to perform navigation
+
+### 3D mode (velodyne + spinal) in real machine
+#### slam + navigation
+
+```
+$ roslaunch cartographer_ros_pr2 turtlebot_velodyne_spinal.launch
+```
+
+**note**: you can also use "2D Nav Goal" icon in Rviz to perform navigation in gazebo world. **However**, please stop the teleop (`roslaunch turtlebot_teleop keyboard_teleop.launch`)
+
+#### localization mode + navigation
+
+**note1**: you have to first create the .pbstream (map) file from aforementioned slam mode, or you can download [eng8-3F.pbstream](https://drive.google.com/open?id=1R-9MXOzTxTEnQLmdoOTsgRyxwW-aDZZ-)
+
+```
+$ roslaunch cartographer_ros_pr2 turtlebot_velodyne_spinal.launch localization_mode:=true load_state_filename:=${HOME}/Downloads/eng8-3F.pbstream
+```
+
+**note2**:  use "2D Pose Estimate" icon in Rviz to set the initial 2D pos for robot, and can also use "2D Nav Goal" icon in Rviz to perform navigation
+
+
+

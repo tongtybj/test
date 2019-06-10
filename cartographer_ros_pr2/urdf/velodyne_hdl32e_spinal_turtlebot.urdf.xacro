@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+
+<robot
+    xmlns:xacro="http://www.ros.org/wiki/xacro" name="velodyne_hdl32e_spinal" >
+
+  <xacro:include filename="$(find kobuki_description)/urdf/kobuki.urdf.xacro"/>
+  <xacro:include filename="$(find turtlebot_description)/urdf/stacks/hexagons.urdf.xacro" />
+  <xacro:include filename="$(find turtlebot_description)/urdf/sensors/kinect.urdf.xacro" />
+
+  <xacro:include filename="$(find cartographer_ros_pr2)/urdf/velodyne_hdl32e_spinal.urdf.xacro" />
+
+
+  <kobuki/>
+  <stack_hexagons parent="base_link"/>
+  <sensor_kinect parent="base_link"/>
+
+  <xacro:velodyne_hdl32e_spinal_module base_link="velodyne_spinal_module_root" />
+
+  <joint name="top_plate_velodyne_joint" type="fixed">
+    <parent link="plate_top_link"/>
+    <child link="velodyne_spinal_module_root"/>
+    <origin xyz="0 0 0.017" rpy="0 0 ${-pi/4}" />
+    </joint>
+
+</robot>
