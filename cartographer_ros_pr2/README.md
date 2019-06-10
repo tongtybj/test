@@ -87,6 +87,7 @@ $ rosbag play ${HOME}/Downloads/2019-03-01-velodyne_imu_usb_cam_eng8-2-3.bag --c
 #### pure localization (set initial pose from rviz, please check [PR #1284](https://github.com/googlecartographer/cartographer_ros/pull/1284))
 
 1. run the pure localization mode:
+
 **note**: download [velodyne-imu-eng8-2-3.pbstream](https://drive.google.com/open?id=1mPGdI8nq-nxTepCWD_NEAEHXTB97ENXp)
 ```
  $ roslaunch cartographer_ros_pr2 velodyne_spinal_pure_localization.launch load_state_filename:=${HOME}/Downloads/velodyne-imu-eng8-2-3.pbstream
@@ -94,7 +95,7 @@ $ rosbag play ${HOME}/Downloads/2019-03-01-velodyne_imu_usb_cam_eng8-2-3.bag --c
 
 2. set the initial pose from rviz using icon `2D Pose Estimate`
 
-3. play a rosbag
+3. play a rosbag (download [2019-03-01-velodyne_imu_usb_cam_eng2-8.bag](https://drive.google.com/open?id=1POLUDcSHjsPxg8YRwZgCt8WuiFKMkx98))
 ```
  $ rosbag play ${HOME}/Downloads/2019-03-01-velodyne_imu_usb_cam_eng2-8.bag --clock
 ```

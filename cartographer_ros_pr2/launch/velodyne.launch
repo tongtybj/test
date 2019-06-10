@@ -1,0 +1,9 @@
+<launch>
+
+  <!-- velodyne HDL-32e -->
+  <include file="$(find velodyne_pointcloud)/launch/32e_points.launch">
+    <arg name="calibration" value="$(find cartographer_ros_pr2)/configuration_files/velodyne-32e-db.yaml" />
+    <arg name="rpm" value="600" />
+    <arg name="device_ip" value="192.168.96.226" />
+  </include>
+</launch>

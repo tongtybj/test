@@ -40,6 +40,3 @@ include_directories(
   ${LUA_INCLUDE_DIR}
 )
 
-add_executable(initpose_node src/initpose_node.cpp)
-target_link_libraries(initpose_node ${catkin_LIBRARIES} cartographer ${LUA_LIBRARIES})
-

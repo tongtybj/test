@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+
+<robot
+    xmlns:xacro="http://www.ros.org/wiki/xacro" name="velodyne_hdl32e_spinal" >
+
+  <xacro:include filename="$(find cartographer_ros_pr2)/urdf/velodyne_hdl32e_spinal.urdf.xacro" />
+
+  <xacro:velodyne_hdl32e_spinal_module />
+
+</robot>

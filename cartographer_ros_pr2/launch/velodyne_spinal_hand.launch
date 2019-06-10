@@ -7,7 +7,7 @@
   <param name="/use_sim_time" value="true" if="$(arg offline)"/>
   <!-- robot (sensor unit) kinematics model -->
   <param name="robot_description"
-         command="$(find xacro)/xacro.py '$(find cartographer_ros_pr2)/urdf/velodyne_hdl32e_spinal.urdf.xacro'" />
+         command="$(find xacro)/xacro.py '$(find cartographer_ros_pr2)/urdf/velodyne_hdl32e_spinal_hand.urdf.xacro'" />
   <node name="robot_state_publisher" pkg="robot_state_publisher"  type="robot_state_publisher" />
 
   <group unless="$(arg offline)">
@@ -37,9 +37,9 @@
   <!-- cartographer -->
   <group unless="$(arg record)">
     <node name="cartographer_node" pkg="cartographer_ros"
-          type="cartographer_node" args="
-                                         -configuration_directory $(find cartographer_ros_pr2)/configuration_files
-                                         -configuration_basename velodyne_spinal.lua"
+          type="cartographer_node"
+          args="-configuration_directory $(find cartographer_ros_pr2)/configuration_files
+                -configuration_basename velodyne_spinal.lua"
           output="screen">
       <remap from="points2" to="/velodyne_points" />
       <remap from="imu" to="/ros_imu"/>
@@ -51,7 +51,7 @@
 
 
       <node name="rviz" pkg="rviz" type="rviz" required="true"
-            args="-d $(find cartographer_ros_pr2)/configuration_files/demo_3d.rviz" />
+            args="-d $(find cartographer_ros_pr2)/configuration_files/velodyne_spinal_hand.rviz" />
     </group>
   </group>
 </launch>

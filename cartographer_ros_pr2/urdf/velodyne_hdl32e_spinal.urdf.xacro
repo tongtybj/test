@@ -5,27 +5,29 @@
 
   <xacro:include filename="$(find velodyne_description)/urdf/HDL-32E.urdf.xacro"/>
 
-  <link name="base_link">
-    <visual>
-      <origin rpy="${pi/2} 0 0" xyz="0 0 0"/>
-      <geometry>
-        <mesh filename="package://cartographer_ros_pr2/urdf/mesh/velodyne-imu-part.stl" scale="0.001  0.001 0.001"/>
-      </geometry>
-    </visual>
-  </link>
+  <xacro:macro name="velodyne_hdl32e_spinal_module" params="base_link:='base_link' imu_link:='imu_link'">
+    <link name="${base_link}">
+      <visual>
+        <origin rpy="${pi/2} 0 0" xyz="0 0 0"/>
+        <geometry>
+          <mesh filename="package://cartographer_ros_pr2/urdf/mesh/velodyne-imu-part.stl" scale="0.001  0.001 0.001"/>
+        </geometry>
+      </visual>
+    </link>
 
-  <!-- velodyne sensor -->
-  <HDL-32E parent="base_link" name="velodyne">
-    <origin xyz="0 0 0.0" rpy="0 0 0" />
-  </HDL-32E>
+    <!-- velodyne sensor -->
+    <HDL-32E parent="${base_link}" name="velodyne">
+      <origin xyz="0 0 0.0" rpy="0 0 0" />
+    </HDL-32E>
 
-  <!-- imu -->
-  <joint name="imu_link_joint" type="fixed">
-    <parent link="base_link" />
-    <child link="imu_link" />
-    <origin xyz="-0.006 -0.01223 -0.007" rpy="0 0 ${pi/4}" />
-  </joint>
+    <!-- imu -->
+    <joint name="imu_link_joint" type="fixed">
+      <parent link="${base_link}" />
+      <child link="imu_link" />
+      <origin xyz="-0.006 -0.01223 -0.007" rpy="0 0 ${pi/4}" />
+    </joint>
 
-  <link name="imu_link" />
+    <link name="${imu_link}" />
+  </xacro:macro>
 
 </robot>
