@@ -59,7 +59,7 @@
       <remap from="imu" to="/ros_imu"/>
     </node>
 
-    <node name="set_initpose" pkg="cartographer_ros" type="set_initpose_from_rviz" output="screen"
+    <node name="set_initpose" pkg="cartographer_ros_pr2" type="set_initpose_from_rviz" output="screen"
           args="-configuration_directory $(find cartographer_ros_pr2)/configuration_files
                 -configuration_basename velodyne_spinal_turtlebot.lua
                 -load_state_filename $(arg load_state_filename)" >

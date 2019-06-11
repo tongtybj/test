@@ -40,3 +40,6 @@ include_directories(
   ${LUA_INCLUDE_DIR}
 )
 
+
+add_executable(set_initpose_from_rviz src/set_initpose_main.cc)
+target_link_libraries(set_initpose_from_rviz ${catkin_LIBRARIES} cartographer ${LUA_LIBRARIES})

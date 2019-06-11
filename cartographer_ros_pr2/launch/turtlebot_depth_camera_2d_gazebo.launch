@@ -66,6 +66,7 @@
       <remap from="points2" to="/camera/depth/points" />
     </node>
 
+    <!-- use original set init pose node -->
     <node name="set_initpose" pkg="cartographer_ros" type="set_initpose_from_rviz" output="screen"
           args="-configuration_directory $(find cartographer_ros_pr2)/configuration_files
                 -configuration_basename turtlebot_depth_camera_2d_gazebo.lua
