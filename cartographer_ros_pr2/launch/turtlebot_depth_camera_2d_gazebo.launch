@@ -13,10 +13,10 @@
   See the License for the specific language governing permissions and
   limitations under the License.
 -->
-
 <launch>
 
   <arg name="localization_mode"  default="false"/>
+  <arg name="existing_path_planning"  default="false"/>
 
   <!--<arg name="world_file"  default="worlds/willowgarage.world"/>-->
   <arg name="world_file"  default="$(env TURTLEBOT_GAZEBO_WORLD_FILE)"/>
@@ -98,6 +98,7 @@
       args="-d $(find cartographer_ros)/configuration_files/demo_2d.rviz" />
 
   <!-- Move base for navigation -->
-  <include file="$(find turtlebot_navigation)/launch/includes/move_base.launch.xml" />
+  <include file="$(find turtlebot_navigation)/launch/includes/move_base.launch.xml" unless="$(arg existing_path_planning)"/>
+  <include file="$(find cartographer_ros_pr2)/launch/existing_path_based_move_base.launch" if="$(arg existing_path_planning)"/>
 
 </launch>

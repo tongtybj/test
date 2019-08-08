@@ -49,18 +49,14 @@
   <!-- Use doc_depend for packages you need only for building documentation: -->
   <!--   <doc_depend>doxygen</doc_depend> -->
   <buildtool_depend>catkin</buildtool_depend>
-  <build_depend>cartographer_ros</build_depend>
-  <build_depend>tf_conversions</build_depend>
+  <depend>cartographer_ros</depend>
+  <depend>nav_core</depend>
+  <depend>nav_msgs</depend>
+  <depend>pluginlib</depend>
+  <depend>tf_conversions</depend>
+  <depend>visualization_msgs</depend>
 
-  <build_export_depend>cartographer_ros</build_export_depend>
-  <build_export_depend>tf_conversions</build_export_depend>
-
-  <exec_depend>cartographer_ros</exec_depend>
-  <exec_depend>tf_conversions</exec_depend>
-
-  <!-- The export tag contains other, unspecified, tags -->
   <export>
-    <!-- Other tools can request additional information be placed here -->
-
+    <nav_core plugin="${prefix}/bgp_plugin.xml" />
   </export>
 </package>
