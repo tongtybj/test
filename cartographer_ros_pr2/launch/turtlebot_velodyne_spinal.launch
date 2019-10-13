@@ -83,9 +83,11 @@
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(find cartographer_ros_pr2)/configuration_files/turtlebot_velodyne.rviz" unless="$(arg headless)"/>
 
   <!-- Move base for navigation -->
-  <include file="$(find turtlebot_navigation)/launch/includes/move_base.launch.xml">
+  <include file="$(find turtlebot_navigation)/launch/includes/move_base.launch.xml" unless="$(arg existing_path_planning)">
     <arg name="odom_topic" value="movebase_odom" /> <!-- maybe we have to omit the raw odometery from turtlebot -->
   </include>
-
+  <include file="$(find cartographer_ros_pr2)/launch/existing_path_based_move_base.launch" if="$(arg existing_path_planning)">
+    <arg name="odom_topic" value="movebase_odom" /> <!-- maybe we have to omit the raw odometery from turtlebot -->
+  </include>
 
 </launch>
