@@ -36,5 +36,9 @@
     <remap from="scan" to="$(arg laser_topic)"/>
 
     <param name="ExistingPathGlobalPlanner/existing_path_topic_name" value="/trajectory_node_list" />
+    <param name="ExistingPathGlobalPlanner/whole_linear_interpolation" value="false" /> <!-- debug -->
+
+    <!-- slow down the rotation speed command in DWA local planner -->
+    <param name="DWAPlannerROS/max_rot_vel" value="1.0" />
   </node>
 </launch>
