@@ -6,8 +6,9 @@ Obtain the latest cartographer from [here](https://google-cartographer-ros.readt
 
 
 ### version requirement
-- cartographer: `master` (**note**: please checkout to `master` branch (not `v1.0.0`))
+- cartographer: `master` (**note**: please checkout to `master` branch (not `v1.0.0`), and follow [this instruction](https://gist.github.com/tongtybj/c5e0cec0160c2194298ee4b5895c3753))
 - cartographer_ros: [`tongtybj:set_initpose_from_rviz`](https://github.com/tongtybj/cartographer_ros/tree/set_initpose_from_rviz)  (opening PR [#1284](https://github.com/googlecartographer/cartographer_ros/pull/1284))
+- cartographer_ :`master` in [here](https://github.com/googlecartographer/cartographer_turtlebot) 
 - ceres-solver: `v1.13.0`
 
 ### protobuf
