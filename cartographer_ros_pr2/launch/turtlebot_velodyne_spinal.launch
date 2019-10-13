@@ -17,6 +17,7 @@
 <launch>
 
   <arg name="localization_mode"  default="false"/>
+  <arg name="existing_path_planning"  default="false"/>
   <arg name="headless"  default="true"/>
 
   <include file="$(find turtlebot_bringup)/launch/minimal.launch" />

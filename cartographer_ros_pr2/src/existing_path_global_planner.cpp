@@ -244,6 +244,10 @@ namespace navfn {
         /* linear interpolarion: [goal_closest_point, goal_point] */
         auto plan_tmp = linearInterpolation(goal_closest_point, goal.pose.position);
         plan.insert(plan.end(), plan_tmp.begin() + 1, plan_tmp.end());
+
+        /* to set the orientation */
+        plan.front() = start;
+        plan.back() = goal;
       }
 
     publishPlan(plan, 0.0, 1.0, 0.0, 0.0);
