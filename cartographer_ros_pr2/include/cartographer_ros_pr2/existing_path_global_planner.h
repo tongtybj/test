@@ -9,6 +9,7 @@
 #include <nav_core/base_global_planner.h>
 #include <nav_msgs/GetPlan.h>
 #include <visualization_msgs/MarkerArray.h>
+#include <tuple>
 
 namespace navfn
 {
@@ -52,6 +53,8 @@ namespace navfn
   private:
 
     void mapToWorld(double mx, double my, double& wx, double& wy);
+    std::vector<geometry_msgs::PoseStamped> linearInterpolation(geometry_msgs::Point start_p, geometry_msgs::Point goal_p);
+    std::tuple<int, geometry_msgs::Point > findClosestPoint(geometry_msgs::Point p, const std::vector<geometry_msgs::Point>& path);
     double default_tolerance_, path_resolution_;
     boost::mutex mutex_;
     ros::ServiceServer make_plan_srv_;

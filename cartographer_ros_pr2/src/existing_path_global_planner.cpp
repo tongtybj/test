@@ -8,6 +8,7 @@
 //register this planner as a BaseGlobalPlanner plugin
 PLUGINLIB_EXPORT_CLASS(navfn::ExistingPathGlobalPlanner, nav_core::BaseGlobalPlanner)
 
+
 namespace navfn {
 
   ExistingPathGlobalPlanner::ExistingPathGlobalPlanner()
@@ -84,11 +85,22 @@ namespace navfn {
                   }
                 else
                   {
-                    double dist = std::sqrt(std::pow(existing_path_.back().y - point.y, 2) + std::pow(existing_path_.back().y - point.y, 2));
+                    double dist = std::sqrt(std::pow(existing_path_.back().y - point.y, 2) + std::pow(existing_path_.back().x - point.x, 2));
                     if(dist > path_resolution_)
                       {
+                        /* do lienar interpolation */
+                        auto interpolated_path = linearInterpolation(existing_path_.back(), point);
+                        interpolated_path.erase(interpolated_path.begin());
+                        for (auto const interpolated_point : interpolated_path)
+                          {
+                            existing_path_.push_back(interpolated_point.pose.position);
+                            ROS_INFO("Add interpolated point [%f, %f] to existing path, dist: %f", interpolated_point.pose.position.x, interpolated_point.pose.position.y, dist);
+                          }
+                      }
+                    else
+                      {
                         existing_path_.push_back(point);
-                        ROS_INFO("Add [%f, %f] to existing path", point.x, point.y);
+                        ROS_INFO("Add raw point [%f, %f] to existing path", point.x, point.y);
                       }
                   }
               }
@@ -120,6 +132,7 @@ namespace navfn {
   bool ExistingPathGlobalPlanner::makePlan(const geometry_msgs::PoseStamped& start, 
       const geometry_msgs::PoseStamped& goal, double tolerance, std::vector<geometry_msgs::PoseStamped>& plan){
     boost::mutex::scoped_lock lock(mutex_);
+
     if(!initialized_){
       ROS_ERROR("This planner has not been initialized yet, but it is being used, please call initialize() before use");
       return false;
@@ -194,31 +207,7 @@ namespace navfn {
     geometry_msgs::PoseStamped pose;
     pose.header.stamp = plan_time;
     pose.header.frame_id = global_frame_;
-    pose.pose.position.z = 0.0;
-    pose.pose.orientation.x = 0.0;
-    pose.pose.orientation.y = 0.0;
-    pose.pose.orientation.z = 0.0;
     pose.pose.orientation.w = 1.0;
-
-    auto linearInterpolation = [this, &pose](geometry_msgs::Point start_p, geometry_msgs::Point goal_p)
-      {
-        std::vector<geometry_msgs::PoseStamped> linear_plan;
-
-        double path_len = std::sqrt(std::pow(goal_p.x - start_p.x, 2) + std::pow(goal_p.y - start_p.y, 2));
-        int path_num = path_len / path_resolution_;
-
-        for(int i = 0; i <= path_num; i++)
-          {
-            pose.pose.position.x = (goal_p.x - start_p.x) * i / path_num + start_p.x;
-            pose.pose.position.y = (goal_p.y - start_p.y) * i / path_num + start_p.y;
-            linear_plan.push_back(pose);
-          }
-
-        pose.pose.position = goal_p;
-        linear_plan.push_back(pose);
-
-        return linear_plan;
-      };
 
     if(whole_linear_interpolation_)
       {
@@ -226,16 +215,34 @@ namespace navfn {
       }
     else
       {
-        plan = linearInterpolation(start.pose.position, existing_path_.front());
+        geometry_msgs::Point start_closest_point, goal_closest_point;
+        int start_index, goal_index;
+        std::tie(start_index, start_closest_point)  = findClosestPoint(start.pose.position, existing_path_);
+        std::tie(goal_index, goal_closest_point)  = findClosestPoint(goal.pose.position, existing_path_);
 
-        for(auto const & point: existing_path_)
+        /* linear interpolarion: [start_point, start_closest_point] */
+        plan = linearInterpolation(start.pose.position, start_closest_point);
+
+        /* middle trajectory on the the existing path */
+        if (start_index < goal_index)
           {
-            pose.pose.position = point;
-            plan.push_back(pose);
+            for(int index = start_index; index <= goal_index; index++)
+              {
+                pose.pose.position = existing_path_.at(index);
+                plan.push_back(pose);
+              }
+          }
+        else // reverse
+          {
+            for(int index = goal_index; index <= start_index; index++)
+              {
+                pose.pose.position = existing_path_.at(index);
+                plan.push_back(pose);
+              }
           }
 
-        /* TODO: the end interpolation is not reasonable */
-        auto plan_tmp = linearInterpolation(existing_path_.back(), goal.pose.position);
+        /* linear interpolarion: [goal_closest_point, goal_point] */
+        auto plan_tmp = linearInterpolation(goal_closest_point, goal.pose.position);
         plan.insert(plan.end(), plan_tmp.begin() + 1, plan_tmp.end());
       }
 
@@ -266,5 +273,46 @@ namespace navfn {
     }
 
     plan_pub_.publish(gui_path);
+  }
+
+  std::vector<geometry_msgs::PoseStamped> ExistingPathGlobalPlanner::linearInterpolation(geometry_msgs::Point start_p, geometry_msgs::Point goal_p)
+  {
+    std::vector<geometry_msgs::PoseStamped> linear_plan;
+
+    geometry_msgs::PoseStamped pose;
+    pose.header.frame_id = global_frame_;
+    pose.pose.orientation.w = 1.0;
+
+    double path_len = std::sqrt(std::pow(goal_p.x - start_p.x, 2) + std::pow(goal_p.y - start_p.y, 2));
+    int path_num = path_len / path_resolution_;
+    for(int i = 0; i <= path_num; i++)
+      {
+        pose.pose.position.x = (goal_p.x - start_p.x) * i / path_num + start_p.x;
+        pose.pose.position.y = (goal_p.y - start_p.y) * i / path_num + start_p.y;
+        linear_plan.push_back(pose);
+      }
+
+    return linear_plan;
+  };
+
+
+  std::tuple<int, geometry_msgs::Point> ExistingPathGlobalPlanner::findClosestPoint(geometry_msgs::Point p, const std::vector<geometry_msgs::Point>& path)
+  {
+    double min_dist = 1e6;
+    geometry_msgs::Point closest_p;
+    int index;
+
+    for(auto candidate_p_itr = path.begin(); candidate_p_itr != path.end(); candidate_p_itr++)
+      {
+        double dist = std::sqrt(std::pow(p.x - candidate_p_itr->x, 2) + std::pow(p.y - candidate_p_itr->y, 2));
+        if (dist < min_dist)
+          {
+            min_dist = dist;
+            closest_p = *candidate_p_itr;
+            index =  std::distance(path.begin(), candidate_p_itr);
+          }
+      }
+
+    return std::forward_as_tuple(index, closest_p);
   }
 };

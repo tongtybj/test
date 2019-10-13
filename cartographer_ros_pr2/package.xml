@@ -56,6 +56,9 @@
   <depend>tf_conversions</depend>
   <depend>visualization_msgs</depend>
 
+  <test_depend>turtlebot_gazebo</test_depend>
+  <test_depend>turtlebot_bringup</test_depend>
+
   <export>
     <nav_core plugin="${prefix}/bgp_plugin.xml" />
   </export>
