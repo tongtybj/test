@@ -234,7 +234,7 @@ namespace navfn {
           }
         else // reverse
           {
-            for(int index = goal_index; index <= start_index; index++)
+            for(int index = start_index; index >= goal_index; index--)
               {
                 pose.pose.position = existing_path_.at(index);
                 plan.push_back(pose);
