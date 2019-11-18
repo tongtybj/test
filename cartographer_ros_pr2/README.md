@@ -134,10 +134,12 @@ $ roslaunch cartographer_ros_pr2 turtlebot_depth_camera_2d_gazebo.launch localiz
 **note1**: please download [turtlebot_gazebo3.pbstream](https://drive.google.com/open?id=1bPeZr5thyy-JaK9bf8Nj9I7TSuwR2LSf)
 
 ```
-$ roslaunch cartographer_ros_pr2 turtlebot_depth_camera_2d_gazebo.launch localization_mode:=true existing_path_planning:=true load_state_filename:=${HOME}/Downloads/turtlebot_gazebo3.pbstream
+$ roslaunch cartographer_ros_pr2 turtlebot_depth_camera_2d_gazebo.launch localization_mode:=true existing_path_planning:=true load_state_filename:=${HOME}/Downloads/turtlebot_gazebo3.pbstream world_file:=/home/chou/ros/test_ws/src/test/cartographer_ros_pr2/worlds/turtlebot_playground.world
 ```
 
-**note2**:  use "2D Nav Goal" icon in Rviz to perform navigation
+**note2**: use "2D Nav Goal" icon in Rviz to perform navigation as shown in [this image](https://drive.google.com/file/d/1He5qJICMJGG4p75X2nsNvr5DkP82z5Xb/view?usp=sharing)
+**note3**: please carefully read [dwa_local_planner](http://wiki.ros.org/dwa_local_planner) and [costmap](http://wiki.ros.org/costmap_2d?distro=melodic) to understand the local path planning for obstacle avoidance.
+
 
 
 ### 3D mode (velodyne + spinal) in real machine

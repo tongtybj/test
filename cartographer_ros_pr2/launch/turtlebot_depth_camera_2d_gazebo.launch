@@ -18,7 +18,6 @@
   <arg name="localization_mode"  default="false"/>
   <arg name="existing_path_planning"  default="false"/>
 
-  <!--<arg name="world_file"  default="worlds/willowgarage.world"/>-->
   <arg name="world_file"  default="$(env TURTLEBOT_GAZEBO_WORLD_FILE)"/>
 
   <arg name="base"      value="$(optenv TURTLEBOT_BASE kobuki)"/> <!-- create, roomba -->
@@ -94,11 +93,24 @@
   <node name="cartographer_occupancy_grid_node" pkg="cartographer_ros"
       type="cartographer_occupancy_grid_node" args="-resolution 0.05" />
 
+  <arg name="rviz_cfg" value="$(find cartographer_ros_pr2)/configuration_files/2d_localization.rviz" if="$(arg localization_mode)"/>
+  <arg name="rviz_cfg" value="$(find cartographer_ros)/configuration_files/demo_2d.rviz" unless="$(arg localization_mode)"/>
   <node name="rviz" pkg="rviz" type="rviz" required="true"
-      args="-d $(find cartographer_ros)/configuration_files/demo_2d.rviz" />
+      args="-d $(arg rviz_cfg)" />
 
   <!-- Move base for navigation -->
   <include file="$(find turtlebot_navigation)/launch/includes/move_base.launch.xml" unless="$(arg existing_path_planning)"/>
   <include file="$(find cartographer_ros_pr2)/launch/existing_path_based_move_base.launch" if="$(arg existing_path_planning)"/>
+
+  <group if="$(arg existing_path_planning)">
+    <param name="/move_base/DWAPlannerROS/acc_lim_theta" value="6.0" />
+    <param name="/move_base/DWAPlannerROS/max_rot_vel" value="3.0" />
+    <param name="/move_base/DWAPlannerROS/min_rot_vel" value="0.0" />
+
+    <param name="/move_base/DWAPlannerROS/path_distance_bias" value="0.1" />
+    <param name="/move_base/DWAPlannerROS/goal_distance_bias" value="0.1" />
+    <param name="/move_base/DWAPlannerROS/occdist_scale" value="0.01" />
+    <param name="/move_base/local_costmap/inflation_layer/inflation_radius" value="0.1" />
+  </group>
 
 </launch>
