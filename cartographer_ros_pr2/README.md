@@ -138,7 +138,8 @@ $ roslaunch cartographer_ros_pr2 turtlebot_depth_camera_2d_gazebo.launch localiz
 ```
 
 **note2**: use "2D Nav Goal" icon in Rviz to perform navigation as shown in [this image](https://drive.google.com/file/d/1He5qJICMJGG4p75X2nsNvr5DkP82z5Xb/view?usp=sharing)
-**note3**: please carefully read [dwa_local_planner](http://wiki.ros.org/dwa_local_planner) and [costmap](http://wiki.ros.org/costmap_2d?distro=melodic) to understand the local path planning for obstacle avoidance.
+
+**note3**: please carefully read [dwa_local_planner](http://wiki.ros.org/dwa_local_planner) and [costmap](http://wiki.ros.org/costmap_2d?distro=melodic) to understand the local path planning for [obstacle avoidance](https://github.com/tongtybj/test/blob/master/cartographer_ros_pr2/launch/turtlebot_depth_camera_2d_gazebo.launch#L106-L113).
 
 
 
