@@ -60,7 +60,7 @@
     <node name="cartographer_node" pkg="cartographer_ros"
           type="cartographer_node"
           args="-configuration_directory $(find cartographer_ros_pr2)/configuration_files
-                -configuration_basename turtlebot_depth_camera_2d_gazebo.lua
+                -configuration_basename turtlebot_depth_camera_2d_gazebo_localization.lua
                 -load_state_filename $(arg load_state_filename)"
           output="screen">
       <remap from="points2" to="/camera/depth/points" />

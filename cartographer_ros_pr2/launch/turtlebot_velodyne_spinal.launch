@@ -53,7 +53,7 @@
     <node name="cartographer_node" pkg="cartographer_ros"
           type="cartographer_node"
           args="-configuration_directory $(find cartographer_ros_pr2)/configuration_files
-                -configuration_basename velodyne_spinal_turtlebot.lua
+                -configuration_basename velodyne_spinal_turtlebot_localization.lua
                 -load_state_filename $(arg load_state_filename)"
           output="screen">
       <remap from="points2" to="/velodyne_points" />
