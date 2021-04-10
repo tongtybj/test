@@ -16,6 +16,7 @@ find_package(Eigen3 REQUIRED)
 include(ExternalProject)
 
 set(QPOASES_INSTALL_DIR ${PROJECT_SOURCE_DIR}/qpoases)
+message(WARNING "${QPOASES_INSTALL_DIR}")
 # QP OASES
 ExternalProject_Add(qpoases
   SVN_REPOSITORY https://projects.coin-or.org/svn/qpOASES/stable/3.1

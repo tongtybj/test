@@ -1,11 +1,17 @@
 #include <trtr/trtr_tracker.h>
 
-bool BasicTracker::init(std::string encoder_model_file, std::string decoder_model_file, float score_threshold, float cosine_window_factor, int cosine_window_step, float size_lpf_factor)
+using namespace TrTrTracker;
+
+bool Base::init(std::string encoder_model_file, std::string decoder_model_file, float score_threshold, float cosine_window_factor, int cosine_window_step, float size_lpf_factor)
 {
   score_threshold_ = score_threshold;
   cosine_window_factor_ = cosine_window_factor;
   cosine_window_step_ = cosine_window_step;
   size_lpf_factor_ = size_lpf_factor;
+
+  // image preprocess normalize
+  img_mean_ = cv::Vec3f(0.485, 0.456, 0.406);
+  img_std_ = cv::Vec3f(0.229, 0.224, 0.225);
 
   if(!loadModels(encoder_model_file, decoder_model_file)) return false;
 
@@ -35,7 +41,7 @@ bool BasicTracker::init(std::string encoder_model_file, std::string decoder_mode
   return true;
 }
 
-void BasicTracker::reset(const std::vector<float>& bbox, const cv::Mat& img)
+void Base::reset(const std::vector<float>& bbox, const cv::Mat& img)
 {
   cx_ = bbox.at(0) + bbox.at(2) / 2;
   cy_ = bbox.at(1) + bbox.at(3) / 2;
@@ -67,7 +73,7 @@ void BasicTracker::reset(const std::vector<float>& bbox, const cv::Mat& img)
   encoderInference(template_img, template_mask);
 }
 
-void BasicTracker::track(const cv::Mat& img)
+void Base::track(const cv::Mat& img)
 {
   float s_z;
   float scale_z;
@@ -159,7 +165,7 @@ void BasicTracker::track(const cv::Mat& img)
 
 }
 
-void BasicTracker::createCosineWindow()
+void Base::createCosineWindow()
 {
   // https://numpy.org/doc/stable/reference/generated/numpy.hanning.html
   cosine_window_ = cv::Mat(cv::Size(search_feat_size_, search_feat_size_), CV_32F);
@@ -175,7 +181,7 @@ void BasicTracker::createCosineWindow()
     }
 }
 
-void BasicTracker::getSiamFCLikeScale(const int& template_img_size,  const float& w, const float& h, float& s_z, float& scale_z)
+void Base::getSiamFCLikeScale(const int& template_img_size,  const float& w, const float& h, float& s_z, float& scale_z)
 {
   const float context_amount = 0.5;
   float wc_z = w + context_amount * (w + h);
@@ -184,7 +190,7 @@ void BasicTracker::getSiamFCLikeScale(const int& template_img_size,  const float
   scale_z = template_img_size / s_z;
 }
 
-void BasicTracker::centerCropping(const cv::Mat& img, const std::vector<float>& bbox, const int& out_sz, const cv::Scalar& padding, cv::Mat& cropped_img)
+void Base::centerCropping(const cv::Mat& img, const std::vector<float>& bbox, const int& out_sz, const cv::Scalar& padding, cv::Mat& cropped_img)
 {
   float a = (out_sz-1) / bbox[2]; // TODO: check the one pixel operation i.e., -1
   float b = (out_sz-1) / bbox[3];
@@ -194,7 +200,7 @@ void BasicTracker::centerCropping(const cv::Mat& img, const std::vector<float>& 
   cv::warpAffine(img, cropped_img, mapping, cropped_img.size(), cv::INTER_LINEAR, cv::BORDER_CONSTANT, padding);
 }
 
-void BasicTracker::makePositionEmbedding(float* p, int feat_size, std::vector<int> mask_bounds)
+void Base::makePositionEmbedding(float* p, int feat_size, std::vector<int> mask_bounds)
 {
   if(mask_bounds.empty()) mask_bounds = std::vector<int>{0, 0, feat_size, feat_size};
 
@@ -253,8 +259,7 @@ void BasicTracker::makePositionEmbedding(float* p, int feat_size, std::vector<in
 }
 
 #ifdef TENSORRT
-
-bool TensorRTTracker::loadModels(std::string encoder_model_file, std::string decoder_model_file)
+bool TensorRT::loadModels(std::string encoder_model_file, std::string decoder_model_file)
 {
   encoder_engine_ = std::shared_ptr<nvinfer1::ICudaEngine>(loadEngine(encoder_model_file), InferDeleter());
   if(!encoder_engine_) return false;
@@ -325,7 +330,7 @@ bool TensorRTTracker::loadModels(std::string encoder_model_file, std::string dec
   return true;
 }
 
-nvinfer1::ICudaEngine* TensorRTTracker::loadEngine(const std::string& model_file)
+nvinfer1::ICudaEngine* TensorRT::loadEngine(const std::string& model_file)
 {
   std::ifstream engineFile(model_file, std::ios::binary);
   if (!engineFile)
@@ -350,7 +355,7 @@ nvinfer1::ICudaEngine* TensorRTTracker::loadEngine(const std::string& model_file
   return runtime->deserializeCudaEngine(engineData.data(), fsize, nullptr);
 }
 
-void TensorRTTracker::encoderInference(const cv::Mat& img, const std::vector<float>& bounds)
+void TensorRT::encoderInference(const cv::Mat& img, const std::vector<float>& bounds)
 {
   processInput(img, bounds, std::string("template"));
 
@@ -375,7 +380,7 @@ void TensorRTTracker::encoderInference(const cv::Mat& img, const std::vector<flo
   std::memcpy(decoder_buffers_->getHostBuffer(binding_name), encoder_buffers_->getHostBuffer(binding_name), encoder_buffers_->size(binding_name));
 }
 
-void TensorRTTracker::decoderInference(const cv::Mat& img, const std::vector<float>& bounds)
+void TensorRT::decoderInference(const cv::Mat& img, const std::vector<float>& bounds)
 {
   processInput(img, bounds, std::string("search"));
 
@@ -394,12 +399,8 @@ void TensorRTTracker::decoderInference(const cv::Mat& img, const std::vector<flo
   bbox_wh_ = cv::Mat(cv::Size(search_feat_size_, search_feat_size_), CV_32FC2, decoder_buffers_->getHostBuffer("pred_bbox_wh"));
 }
 
-void TensorRTTracker::processInput(const cv::Mat& img, const std::vector<float>& bounds, const std::string image_type)
+void TensorRT::processInput(const cv::Mat& img, const std::vector<float>& bounds, const std::string image_type)
 {
-  /* image */
-  cv::Vec3f mean(0.485, 0.456, 0.406);
-  cv::Vec3f std(0.229, 0.224, 0.225);
-
   std::shared_ptr<samplesCommon::BufferManager>  buffers;
   if(image_type == std::string("template"))
     buffers = encoder_buffers_;
@@ -415,9 +416,9 @@ void TensorRTTracker::processInput(const cv::Mat& img, const std::vector<float>&
 
   img.forEach<cv::Vec3b>([&](const cv::Vec3b &p, const int position[]) {
       int offset =  (position[0] * rows + position[1]) * channels;
-      hostDataBuffer[offset] = (p[0] / 255.0 - mean[0]) / std[0];
-      hostDataBuffer[offset + 1] = (p[1] / 255.0 - mean[1]) / std[1];
-      hostDataBuffer[offset + 2] = (p[2] / 255.0 - mean[2]) / std[2];
+      hostDataBuffer[offset] = (p[0] / 255.0 - img_mean_[0]) / img_std_[0];
+      hostDataBuffer[offset + 1] = (p[1] / 255.0 - img_mean_[1]) / img_std_[1];
+      hostDataBuffer[offset + 2] = (p[2] / 255.0 - img_mean_[2]) / img_std_[2];
     });
 
   /* position embedding */
@@ -442,6 +443,243 @@ void TensorRTTracker::processInput(const cv::Mat& img, const std::vector<float>&
 }
 #endif
 
+#ifdef ONNXRT
+bool ONNX::loadModels(std::string encoder_model_file, std::string decoder_model_file)
+{
+  // https://github.com/microsoft/onnxruntime/blob/master/csharp/test/Microsoft.ML.OnnxRuntime.EndToEndTests.Capi/CXX_Api_Sample.cpp
+  env_ = Ort::Env(ORT_LOGGING_LEVEL_WARNING, "TrTr Tracker");
+  Ort::SessionOptions options;
+  //options.SetGraphOptimizationLevel(ORT_ENABLE_BASIC); // no improvement, and become worse!
+
+  encoder_session_ = std::make_shared<Ort::Session>(env_, encoder_model_file.c_str(), options);
+  decoder_session_ = std::make_shared<Ort::Session>(env_, decoder_model_file.c_str(), options);
+
+  size_t num_input_nodes = encoder_session_->GetInputCount();
+  for (int i = 0; i < num_input_nodes; i++)
+    {
+      std::string input_name(encoder_session_->GetInputName(i, allocator_));
+      std::cout << "Input name = " << input_name << ": ";
+
+      Ort::TypeInfo type_info = encoder_session_->GetInputTypeInfo(i);
+      auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
+
+      std::vector<int64_t> input_node_dims;
+      input_node_dims = tensor_info.GetShape();
+      std::cout << "[";
+      for (auto dim:  input_node_dims) std::cout << dim << ", ";
+      std::cout << "]" << std::endl;
+
+      if(input_name == std::string("template_image"))
+        {
+          template_img_size_ = (int)input_node_dims.at(1);
+        }
+      if(input_name == std::string("template_pos_embed"))
+        {
+          template_feat_size_ = (int)input_node_dims.at(1);
+          transformer_dim_ = (int)input_node_dims.at(3);
+        }
+
+      encoder_input_names_.push_back(encoder_session_->GetInputName(i, allocator_));
+      encoder_input_index_map_.insert(std::make_pair(input_name, i));
+      encoder_input_tensors_.push_back(Ort::Value::CreateTensor<float>(allocator_, input_node_dims.data(), input_node_dims.size()));
+
+    }
+
+  size_t num_output_nodes = encoder_session_->GetOutputCount();
+  for (int i = 0; i < num_output_nodes; i++)
+    {
+      std::string output_name(encoder_session_->GetOutputName(i, allocator_));
+      std::cout << "Output name = " << output_name << ": ";
+
+      Ort::TypeInfo type_info = encoder_session_->GetOutputTypeInfo(i);
+      auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
+
+      std::vector<int64_t> output_node_dims;
+      output_node_dims = tensor_info.GetShape();
+      std::cout << "[";
+      for (auto dim:  output_node_dims) std::cout << dim << ", ";
+      std::cout << "]" << std::endl;
+
+      encoder_output_names_.push_back(encoder_session_->GetOutputName(i, allocator_));
+      encoder_output_index_map_.insert(std::make_pair(output_name, i));
+    }
+
+  num_input_nodes = decoder_session_->GetInputCount();
+  for (int i = 0; i < num_input_nodes; i++)
+    {
+      std::string input_name(decoder_session_->GetInputName(i, allocator_));
+      std::cout << "Input name = " << input_name << ": ";
+
+      Ort::TypeInfo type_info = decoder_session_->GetInputTypeInfo(i);
+      auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
+
+      std::vector<int64_t> input_node_dims;
+      input_node_dims = tensor_info.GetShape();
+      std::cout << "[";
+      for (auto dim:  input_node_dims) std::cout << dim << ", ";
+      std::cout << "]" << std::endl;
+
+      if(input_name == std::string("search_image"))
+        search_img_size_ = (int)input_node_dims.at(1);
+      if(input_name == std::string("search_pos_embed"))
+        search_feat_size_ = (int)input_node_dims.at(1);
+
+      decoder_input_names_.push_back(decoder_session_->GetInputName(i, allocator_));
+      decoder_input_index_map_.insert(std::make_pair(input_name, i));
+      decoder_input_tensors_.push_back(Ort::Value::CreateTensor<float>(allocator_, input_node_dims.data(), input_node_dims.size()));
+    }
+
+  num_output_nodes = decoder_session_->GetOutputCount();
+  for (int i = 0; i < num_output_nodes; i++)
+    {
+      std::string output_name(decoder_session_->GetOutputName(i, allocator_));
+      std::cout << "Output name = " << output_name << ": ";
+
+      Ort::TypeInfo type_info = decoder_session_->GetOutputTypeInfo(i);
+      auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
+
+      std::vector<int64_t> output_node_dims;
+      output_node_dims = tensor_info.GetShape();
+      std::cout << "[";
+      for (auto dim:  output_node_dims) std::cout << dim << ", ";
+      std::cout << "]" << std::endl;
+
+      decoder_output_names_.push_back(decoder_session_->GetOutputName(i, allocator_));
+      decoder_output_index_map_.insert(std::make_pair(output_name, i));
+    }
+
+  return true;
+}
+
+void ONNX::encoderInference(const cv::Mat& img, const std::vector<float>& bounds)
+{
+  processInput(img, bounds, std::string("template"));
+
+  auto output_tensors = encoder_session_->Run(Ort::RunOptions{nullptr},
+                                              encoder_input_names_.data(),
+                                              encoder_input_tensors_.data(), // ort_inputs.data(),
+                                              encoder_input_names_.size(),
+                                              encoder_output_names_.data(),
+                                              encoder_output_names_.size());
+
+  // const float* encoder_memory = output_tensors.front().GetTensorData<float>();
+  // for(int i = 0; i < transformer_dim_ / 4; i++)
+  //   std::cout << encoder_memory[4*i] << " " << encoder_memory[4*i+1] << " " << encoder_memory[4*i+2] << " " << encoder_memory[4*i+3] << std::endl;
+
+
+  int index = decoder_input_index_map_.at(std::string("encoder_memory"));
+  int size = transformer_dim_ * template_feat_size_ * template_feat_size_ * sizeof(float);
+  std::memcpy(decoder_input_tensors_.at(index).GetTensorMutableData<void>(),
+              output_tensors.front().GetTensorMutableData<void>(),
+              size);
+
+  int encoder_index = encoder_input_index_map_.at(std::string("template_pos_embed"));
+  int decoder_index = decoder_input_index_map_.at(std::string("template_pos_embed"));
+  size = transformer_dim_ * template_feat_size_ * template_feat_size_ * sizeof(float);
+  std::memcpy(decoder_input_tensors_.at(decoder_index).GetTensorMutableData<void>(),
+              encoder_input_tensors_.at(encoder_index).GetTensorMutableData<void>(),
+              size);
+}
+
+void ONNX::decoderInference(const cv::Mat& img, const std::vector<float>& bounds)
+{
+  processInput(img, bounds, std::string("search"));
+
+  auto output_tensors = decoder_session_->Run(Ort::RunOptions{nullptr},
+                                              decoder_input_names_.data(),
+                                              decoder_input_tensors_.data(),
+                                              decoder_input_names_.size(),
+                                              decoder_output_names_.data(),
+                                              decoder_output_names_.size());
+
+  heatmap_ = cv::Mat(cv::Size(search_feat_size_, search_feat_size_), CV_32FC1,
+                     output_tensors.at(decoder_output_index_map_.at(std::string("pred_heatmap"))).GetTensorMutableData<float>());
+
+  bbox_reg_ = cv::Mat(cv::Size(search_feat_size_, search_feat_size_), CV_32FC2,
+                      output_tensors.at(decoder_output_index_map_.at(std::string("pred_bbox_reg"))).GetTensorMutableData<float>());
+  bbox_wh_ = cv::Mat(cv::Size(search_feat_size_, search_feat_size_), CV_32FC2,
+                     output_tensors.at(decoder_output_index_map_.at(std::string("pred_bbox_wh"))).GetTensorMutableData<float>());
+}
+
+void ONNX::processInput(const cv::Mat& img, const std::vector<float>& bounds, const std::string image_type)
+{
+
+  float* p;
+  if(image_type == std::string("template"))
+    {
+      p = encoder_input_tensors_.at(encoder_input_index_map_.at(image_type + std::string("_image"))).GetTensorMutableData<float>();
+      // auto tensor_info = encoder_input_tensors_.at(encoder_input_index_map_.at(image_type + std::string("_image"))).GetTensorTypeAndShapeInfo();
+      // std::vector<int64_t> output_node_dims;
+      // output_node_dims = tensor_info.GetShape();
+      // std::cout << "[";
+      // for (auto dim:  output_node_dims) std::cout << dim << ", ";
+      // std::cout << "]" << std::endl;
+    }
+  if(image_type == std::string("search"))
+    p = decoder_input_tensors_.at(decoder_input_index_map_.at(image_type + std::string("_image"))).GetTensorMutableData<float>();
+
+
+  int cols = img.cols;
+  int rows = img.rows;
+  int channels = img.channels();
+
+  img.forEach<cv::Vec3b>([&](const cv::Vec3b &v, const int position[]) {
+      int offset =  (position[0] * rows + position[1]) * channels;
+      p[offset] = (v[0] / 255.0 - img_mean_[0]) / img_std_[0];
+      p[offset + 1] = (v[1] / 255.0 - img_mean_[1]) / img_std_[1];
+      p[offset + 2] = (v[2] / 255.0 - img_mean_[2]) / img_std_[2];
+    });
+
+
+  /* position embedding */
+  int feat_size = 0;
+  if(image_type == std::string("template")) feat_size = template_feat_size_;
+  if(image_type == std::string("search")) feat_size = search_feat_size_;
+  std::string input_name = image_type + std::string("_pos_embed");
+
+  if(bounds[0] >= 1 || bounds[1] >= 1 || bounds[2] < feat_size - 1 || bounds[3] < feat_size - 1)
+    {
+      std::vector<int> discretized_mask{(int)std::ceil(bounds[0]), (int)std::ceil(bounds[1]), (int)std::floor(bounds[2]), (int)std::floor(bounds[3])};
+      if(image_type == std::string("template"))
+        {
+          int index = encoder_input_index_map_.at(input_name);
+          makePositionEmbedding(encoder_input_tensors_.at(index).GetTensorMutableData<float>(),
+                                feat_size, discretized_mask);
+        }
+      if(image_type == std::string("search"))
+        {
+          int index = decoder_input_index_map_.at(input_name);
+          makePositionEmbedding(decoder_input_tensors_.at(index).GetTensorMutableData<float>(),
+                                feat_size, discretized_mask);
+        }
+    }
+  else
+    {
+      int size = transformer_dim_ * feat_size * feat_size * sizeof(float);
+      if(image_type == std::string("template"))
+        {
+          int index = encoder_input_index_map_.at(input_name);
+          auto tensor_info = encoder_input_tensors_.at(index).GetTensorTypeAndShapeInfo();
+          std::vector<int64_t> output_node_dims;
+          output_node_dims = tensor_info.GetShape();
+
+          std::memcpy(encoder_input_tensors_.at(index).GetTensorMutableData<void>(),
+                      (void*)default_template_pos_embed_.data, size);
+
+          // for(int i = 0; i < transformer_dim_ / 4; i++)
+          //   std::cout << encoder_input_tensors_.at(index).GetTensorData<float>()[4*i] << " " << encoder_input_tensors_.at(index).GetTensorData<float>()[4*i+1] << " " << encoder_input_tensors_.at(index).GetTensorData<float>()[4*i+2] << " " << encoder_input_tensors_.at(index).GetTensorData<float>()[4*i+3] << std::endl;
+       }
+
+      if(image_type == std::string("search"))
+        {
+          int index = decoder_input_index_map_.at(input_name);
+          std::memcpy(decoder_input_tensors_.at(index).GetTensorMutableData<void>(),
+                      (void*)default_search_pos_embed_.data, size);
+        }
+
+    }
+}
+#endif
 
 int main (int argc, char **argv)
 {
@@ -455,7 +693,6 @@ int main (int argc, char **argv)
 
   std::string decoder_model_file;
   nhp.param ("decoder_model_file", decoder_model_file, std::string("model.trt"));
-
 
   std::string img_dir;
   nhp.param ("image_dir", img_dir, std::string(""));
@@ -475,23 +712,35 @@ int main (int argc, char **argv)
   int device; // 0: cpu, 1: gpu
   nhp.param ("device", device, 1);
 
-#if !defined(TENSORRT) && !defined(ONNX)
+#if !defined(TENSORRT) && !defined(ONNXRT)
   ROS_FATAL("do not have tensorRT nor onnx, can not do inference");
   return 0;
 #endif
 
 #if !defined(TENSORRT)
-  device = 0;
-  ROS_WARN("can only support CPU model");
+  if(device == 0)
+    {
+      ROS_FATAL("can only support CPU model");
+      return 0;
+    }
 #endif
 
-#if !defined(ONNX)
-  device = 1;
-  ROS_WARN("can only support GPU model");
+#if !defined(ONNXRT)
+  if(device == 1)
+    {
+      ROS_FATAL("can only support GPU model");
+      return 0;
+    }
 #endif
 
-  std::shared_ptr<BasicTracker> tracker;
-  if(device == 1)  tracker = std::make_shared<TensorRTTracker>();
+  std::shared_ptr<Base> tracker;
+#ifdef ONNXRT
+  if(device == 0)  tracker = std::make_shared<ONNX>();
+#endif
+
+#ifdef TENSORRT
+  if(device == 1)  tracker = std::make_shared<TensorRT>();
+#endif
 
   // initialize
   if(!tracker->init(encoder_model_file, decoder_model_file, score_threshold, cosine_window_factor, cosine_window_step, size_lpf_factor)) return 0;
@@ -548,25 +797,24 @@ int main (int argc, char **argv)
               //std::cout <<  << std::endl;
             }
 
-
           cv::rectangle(img,
                         tracker->getBboxLT(), tracker->getBboxRB(),
                         cv::Scalar(0,255,255),3,4);
+
+          if (gt_bboxes.size() > i)
+            {
+              auto gt_bbox = gt_bboxes.at(i);
+              cv::rectangle(img,
+                            cv::Point(gt_bbox.at(0), gt_bbox.at(1)),
+                            cv::Point(gt_bbox.at(0) + gt_bbox.at(2), gt_bbox.at(1) + gt_bbox.at(3)),
+                            cv::Scalar(0,255,0),3,4);
+            }
 
           cv::imshow("result", img);
           auto k = cv::waitKey(10);
 
           if(k == 27) break;
 
-#if 0
-          auto gt_bbox = gt_bboxes.at(i);
-          cv::rectangle(img,
-                        cv::Point(gt_bbox.at(0), gt_bbox.at(1)),
-                        cv::Point(gt_bbox.at(0) + gt_bbox.at(2), gt_bbox.at(1) + gt_bbox.at(3)),
-                        cv::Scalar(0,255,0),3,4);
-          cv::imshow("test", img);
-          cv::waitKey(10);
-#endif
         }
 
       std::cout << (img_files.size() - 1) / sum_t << " FPS" <<std::endl;

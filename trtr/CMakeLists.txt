@@ -71,6 +71,48 @@ else()
   add_definitions(-DTENSORRT)
 endif()
 
+execute_process(
+  COMMAND uname -m
+  OUTPUT_VARIABLE ARCH
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+if(${ARCH} STREQUAL "x86_64")
+  MESSAGE(STATUS "architecture is ${ARCH}, can compile the CPU model based on ONNX runtime")
+  add_definitions(-DONNXRT)
+  set(ONNXRT_VERSION 1.6.0)
+  set(ONNXRT_DIR onnxruntime-linux-x64-${ONNXRT_VERSION})
+
+  message(${PROJECT_SOURCE_DIR})
+  find_path(ONNXRT_INCLUDE_DIR onnxruntime_cxx_api.h
+    HINTS ${CMAKE_CURRENT_BINARY_DIR}/${ONNXRT}
+    PATH_SUFFIXES include)
+  MESSAGE(STATUS "Found ONNXRuntime headers at ${ONNXRT_INCLUDE_DIR}")
+  find_library(ONNXRT_LIBRARY onnxruntime
+    HINTS ${CMAKE_CURRENT_BINARY_DIR}/${ONNXRT}
+    PATH_SUFFIXES lib)
+  MESSAGE(STATUS "ONNXRT_LIBRARY_INFER at ${ONNXRT_LIBRARY}")
+  find_package_handle_standard_args(
+    ONNXTR_FOUND DEFAULT_MSG ONNXRT_INCLUDE_DIR ONNXRT_LIBRARY)
+  if(NOT ONNXTR_FOUND)
+    MESSAGE("Download ONNX RUNTIME library")
+    set(ONNXRT_URL https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRT_VERSION}/${ONNXRT_DIR}.tgz) # we only test with v1.6.0
+    file(DOWNLOAD ${ONNXRT_URL} ${CMAKE_CURRENT_BINARY_DIR}/${ONNXRT_DIR}.tgz
+      TIMEOUT 60  # seconds
+      TLS_VERIFY ON)
+    execute_process(
+      COMMAND tar -zxf ${ONNXRT_DIR}.tgz
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    find_path(ONNXRT_INCLUDE_DIR onnxruntime_cxx_api.h
+      HINTS ${CMAKE_CURRENT_BINARY_DIR}/${ONNXRT_DIR}
+      PATH_SUFFIXES include)
+    MESSAGE("Found ONNXRuntime headers at ${ONNXRT_INCLUDE_DIR}")
+    find_library(ONNXRT_LIBRARY onnxruntime
+      HINTS ${CMAKE_CURRENT_BINARY_DIR}/${ONNXRT_DIR}
+      PATH_SUFFIXES lib)
+    MESSAGE("ONNXRT_LIBRARY_INFER at ${ONNXRT_LIBRARY}")
+  endif()
+endif()
+
 ###################################
 ## catkin specific configuration ##
 ###################################
@@ -96,7 +138,8 @@ ${TENSORRT_SAMPLE_INCLUDE_DIR}
 ${OpenCV_INCLUDE_DIRS}
 ${Boost_INCLUDE_DIRS}
 ${CUDA_INCLUDE_DIR}
+${ONNXRT_INCLUDE_DIR}
 )
 
 add_executable(trtr_tracker_node src/trtr_tracker.cpp ${TENSORRT_SAMPLE_INCLUDE_DIR}/logger.cpp)
-target_link_libraries (trtr_tracker_node ${catkin_LIBRARIES} ${TENSORRT_LIBRARY} ${CUDA_LIBRARY} ${OpenCV_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries (trtr_tracker_node ${catkin_LIBRARIES} ${TENSORRT_LIBRARY} ${CUDA_LIBRARY} ${OpenCV_LIBRARIES} ${Boost_LIBRARIES} ${ONNXRT_LIBRARY})
