@@ -1,10 +1,10 @@
 <?xml version="1.0"?>
 <launch>
-  <arg name="image_dir" default="" />
-  <arg name="gt_file" default="" />
+  <arg name="image_topic" default="image" />
+  <arg name="init_rect_topic" default="rect" />
+
   <arg name="device" default="1" /> <!-- 0: cpu; 1: gpu -->
   <arg name="fp16" default="True" />
-
 
   <arg name="encoder_model_file" value="$(find trtr)/models/trtr_resnet50_encoder_fp16.trt" if="$(eval device and fp16)"/>
   <arg name="decoder_model_file" value="$(find trtr)/models/trtr_resnet50_decoder_fp16.trt" if="$(eval device and fp16)"/>
@@ -15,11 +15,12 @@
   <arg name="encoder_model_file" value="$(find trtr)/models/trtr_resnet50_encoder.onnx" unless="$(arg device)"/>
   <arg name="decoder_model_file" value="$(find trtr)/models/trtr_resnet50_decoder.onnx" unless="$(arg device)"/>
 
-  <node pkg="trtr" type="trtr_tracker_node" name="trtr_tracker_node" output="screen">
+  <node pkg="nodelet" type="nodelet" name="trtr_tracker"
+        args="standalone jsk_perception/TrTrTrackerRos tracker_nodelet" output="screen">
+    <remap from="~input" to="$(arg image_topic)" />
+    <remap from="~input/rect" to="$(arg init_rect_topic)" />
     <param name="encoder_model_file" value="$(arg encoder_model_file)"/>
     <param name="decoder_model_file" value="$(arg decoder_model_file)"/>
-    <param name="image_dir" value="$(arg image_dir)"/>
-    <param name="gt_file" value="$(arg gt_file)"/>
     <param name="device" value="$(arg device)" />
   </node>
 

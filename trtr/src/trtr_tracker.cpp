@@ -1,6 +1,187 @@
+// -*- mode: c++ -*-
+/*********************************************************************
+ * Software License Agreement (BSD License)
+ *
+ *  Copyright (c) 2021, JSK Lab
+ *  All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted provided that the following conditions
+ *  are met:
+ *
+ *   * Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *   * Redistributions in binary form must reproduce the above
+ *     copyright notice, this list of conditions and the following
+ *     disclaimer in the documentation and/o2r other materials provided
+ *     with the distribution.
+ *   * Neither the name of the JSK Lab nor the names of its
+ *     contributors may be used to endorse or promote products derived
+ *     from this software without specific prior written permission.
+ *
+ *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ *  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ *  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ *  FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ *  COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ *  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+ *  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ *  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ *  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ *  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ *  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *  POSSIBILITY OF SUCH DAMAGE.
+ *********************************************************************/
+
 #include <trtr/trtr_tracker.h>
 
-using namespace TrTrTracker;
+using namespace trtr;
+using namespace jsk_perception;
+
+void TrTrTrackerRos::onInit()
+{
+  DiagnosticNodelet::onInit();
+
+  // ros pub-sub
+  pnh_->param("approximate_sync", approximate_sync_, false);
+  pnh_->param("queue_size", queue_size_, 100);
+
+  // inferene model files
+  std::string encoder_model_file;
+  pnh_->param ("encoder_model_file", encoder_model_file, std::string("model.trt"));
+
+  std::string decoder_model_file;
+  pnh_->param ("decoder_model_file", decoder_model_file, std::string("model.trt"));
+
+  // hyper-parameter for postprocess
+  // following default values are fine-tuned with various tracker benchmark.
+  double cosine_window_factor, size_lpf_factor, score_threshold;
+  int cosine_window_step;
+  pnh_->param ("cosine_window_factor", cosine_window_factor, 0.4);
+  pnh_->param ("cosine_window_step", cosine_window_step, 3);
+  pnh_->param ("size_lpf_factor", size_lpf_factor, 0.8);
+  pnh_->param ("score_threshold", score_threshold, 0.05);
+
+  int device; // 0: cpu, 1: gpu
+  pnh_->param ("device", device, 1);
+
+
+#if !defined(TENSORRT) && !defined(ONNXRT)
+  ROS_FATAL("do not have tensorRT nor onnx, can not do inference");
+  return;
+  #endif
+
+#if !defined(TENSORRT)
+  if(device == 1)
+    {
+      ROS_FATAL("can only support CPU model");
+      return;
+    }
+  #endif
+
+#if !defined(ONNXRT)
+  if(device == 0)
+    {
+      ROS_FATAL("can only support GPU model");
+      return;
+    }
+  #endif
+
+  // initialize tracker
+#ifdef ONNXRT
+  if(device == 0)  tracker_ = std::make_shared<ONNX>();
+#endif
+
+#ifdef TENSORRT
+  if(device == 1)  tracker_ = std::make_shared<TensorRT>();
+#endif
+
+  if(!tracker_->init(encoder_model_file, decoder_model_file, score_threshold, cosine_window_factor, cosine_window_step, size_lpf_factor)) return;
+
+
+  // subscribers to set initial tracking window.
+  image_to_init_sub_.subscribe(*pnh_, "input", 1);
+  rect_to_init_sub_.subscribe(*pnh_, "input/rect", 1);
+
+  if (approximate_sync_)
+    {
+      async_ = boost::make_shared<message_filters::Synchronizer<ApproximateSyncPolicy> >(queue_size_);
+      async_->connectInput(image_to_init_sub_, rect_to_init_sub_);
+      async_->registerCallback(boost::bind(&TrTrTrackerRos::setInitialRect, this, _1, _2));
+    }
+  else
+    {
+      sync_ = boost::make_shared<message_filters::Synchronizer<ExactSyncPolicy> >(queue_size_);
+      sync_->connectInput(image_to_init_sub_, rect_to_init_sub_);
+      sync_->registerCallback(boost::bind(&TrTrTrackerRos::setInitialRect, this, _1, _2));
+    }
+
+  image_pub_ = advertiseImage(*pnh_, "output/vis", 1);
+  rect_pub_ = advertise<jsk_recognition_msgs::RectArray>(*pnh_, "output/rect", 1);
+  it_ = boost::make_shared<image_transport::ImageTransport>(*pnh_);
+
+  onInitPostProcess();
+}
+
+void TrTrTrackerRos::subscribe()
+{
+  // subscribers to process the tracking
+  image_sub_ = it_->subscribe("input", 10, &TrTrTrackerRos::getTrackingResult, this);
+}
+
+void TrTrTrackerRos::unsubscribe()
+{
+  image_sub_.shutdown();
+}
+
+void TrTrTrackerRos::setInitialRect(const sensor_msgs::Image::ConstPtr& image_msg,
+                                    const jsk_recognition_msgs::RectArray::ConstPtr& rect_msg)
+{
+  boost::mutex::scoped_lock lock(mutex_);
+
+  cv::Mat image = cv_bridge::toCvCopy(image_msg, sensor_msgs::image_encodings::BGR8)->image;
+
+  // TODO: currently only support one target
+  std::vector<float> bbox;
+  bbox.push_back(rect_msg->rects.at(0).x);
+  bbox.push_back(rect_msg->rects.at(0).y);
+  bbox.push_back(rect_msg->rects.at(0).width);
+  bbox.push_back(rect_msg->rects.at(0).height);
+
+  tracker_->reset(bbox, image);
+  rect_initialized_ = true;
+
+  ROS_INFO("set the initialze rect to update trtr encoder part");
+}
+
+void TrTrTrackerRos::getTrackingResult(const sensor_msgs::ImageConstPtr& msg)
+{
+  boost::mutex::scoped_lock lock(mutex_);
+
+  if (!rect_initialized_)
+    return;
+
+  cv::Mat image = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8)->image;
+  tracker_->track(image);
+
+  cv::rectangle(image,
+                tracker_->getBboxLT(), tracker_->getBboxRB(),
+                cv::Scalar(0,255,255),3,4);
+
+
+  // Publish all.
+  image_pub_.publish(cv_bridge::CvImage(msg->header, sensor_msgs::image_encodings::BGR8, image).toImageMsg());
+
+  jsk_recognition_msgs::RectArray rect_msg;
+  rect_msg.header = msg->header;
+  jsk_recognition_msgs::Rect rect;
+  rect.x = tracker_->getBboxLT().x;
+  rect.y = tracker_->getBboxLT().y;
+  rect.width = tracker_->getBboxRB().x - tracker_->getBboxLT().x;
+  rect.height = tracker_->getBboxRB().y -tracker_->getBboxLT().y;
+  rect_msg.rects.push_back(rect);
+  rect_pub_.publish(rect_msg);
+}
 
 bool Base::init(std::string encoder_model_file, std::string decoder_model_file, float score_threshold, float cosine_window_factor, int cosine_window_step, float size_lpf_factor)
 {
@@ -152,17 +333,6 @@ void Base::track(const cv::Mat& img)
   cy_ = (y1 + y2) / 2;
   w_ = (x2 - x1);
   h_ = (y2 - y1);
-
-  // cv::rectangle(search_img,
-  //               cv::Point(bbox_ct[0] - target_wh[0] * scale_z / 2, bbox_ct[1] - target_wh[1] * scale_z / 2),
-  //               cv::Point(bbox_ct[0] + target_wh[0] * scale_z / 2, bbox_ct[1] + target_wh[1] * scale_z / 2),
-  //               cv::Scalar(0,255,255),3,4);
-
-  // debug
-  // cv::Mat heatmap_v;
-  // post_heatmap.convertTo(heatmap_v, CV_8UC1, 255);
-  // cv::imshow("test", heatmap_v);
-
 }
 
 void Base::createCosineWindow()
@@ -204,7 +374,6 @@ void Base::makePositionEmbedding(float* p, int feat_size, std::vector<int> mask_
 {
   if(mask_bounds.empty()) mask_bounds = std::vector<int>{0, 0, feat_size, feat_size};
 
-  //printf("%d, %d, %d, %d \n", mask_bounds[0], mask_bounds[1], mask_bounds[2], mask_bounds[3]);
   float factor_x =  2 * (float)M_PI / ((mask_bounds.at(2) - mask_bounds.at(0)) + 1e-6);
   float factor_y =  2 * (float)M_PI / ((mask_bounds.at(3) - mask_bounds.at(1)) + 1e-6);
 #pragma omp parallel for
@@ -271,22 +440,8 @@ bool TensorRT::loadModels(std::string encoder_model_file, std::string decoder_mo
   decoder_context_ = std::shared_ptr<nvinfer1::IExecutionContext>(decoder_engine_->createExecutionContext(), InferDeleter());
   decoder_buffers_ = std::make_shared<samplesCommon::BufferManager>(decoder_engine_);
 
-  std::cout << encoder_engine_->getName() << " has " << encoder_engine_->getNbBindings() << " bindings" << std::endl;
   for(int i = 0; i < encoder_engine_->getNbBindings(); i++)
     {
-      if(encoder_engine_->bindingIsInput(i)) std::cout << "Input: ";
-      else std::cout << "Output: ";
-      int tpye_int = (int)encoder_engine_->getBindingDataType(i);
-      std::string type = tpye_int == 0?std::string("Float32"):
-        tpye_int == 1?std::string("Float16"):
-        tpye_int == 2?std::string("int8"):
-        tpye_int == 3?std::string("int32"):std::string("bolean");
-      std::cout << encoder_engine_->getBindingName(i) << "; dtype: " << type << "; shape: [";
-      auto dims = encoder_engine_->getBindingDimensions(i);
-      for (int j = 0; j <  dims.nbDims; j ++)
-        std::cout <<  dims.d[j] << ", ";
-      std::cout << "]" << " size: " << encoder_buffers_->size(encoder_engine_->getBindingName(i)) << std::endl;
-
       if(encoder_engine_->getBindingName(i) == std::string("template_image"))
         {
           template_img_size_ = encoder_engine_->getBindingDimensions(i).d[1];
@@ -298,22 +453,8 @@ bool TensorRT::loadModels(std::string encoder_model_file, std::string decoder_mo
         }
     }
 
-  std::cout << decoder_engine_->getName() << " has " << decoder_engine_->getNbBindings() << " bindings" << std::endl;
   for(int i = 0; i < decoder_engine_->getNbBindings(); i++)
     {
-      if(decoder_engine_->bindingIsInput(i)) std::cout << "Input: ";
-      else std::cout << "Output: ";
-      int tpye_int = (int)decoder_engine_->getBindingDataType(i);
-      std::string type = tpye_int == 0?std::string("Float32"):
-        tpye_int == 1?std::string("Float16"):
-        tpye_int == 2?std::string("int8"):
-        tpye_int == 3?std::string("int32"):std::string("bolean");
-      std::cout << decoder_engine_->getBindingName(i) << "; dtype: " << type << "; shape: [";
-      auto dims = decoder_engine_->getBindingDimensions(i);
-      for (int j = 0; j <  dims.nbDims; j ++)
-        std::cout <<  dims.d[j] << ", ";
-      std::cout << "]" << " size: " << decoder_buffers_->size(decoder_engine_->getBindingName(i)) << std::endl;
-
       if(decoder_engine_->getBindingName(i) == std::string("search_image"))
         {
           search_img_size_ = decoder_engine_->getBindingDimensions(i).d[1];
@@ -323,9 +464,6 @@ bool TensorRT::loadModels(std::string encoder_model_file, std::string decoder_mo
           search_feat_size_ = decoder_engine_->getBindingDimensions(i).d[1];
         }
     }
-
-  // create stream:
-  // cudaStreamCreate(&cuda_stream_);
 
   return true;
 }
@@ -359,19 +497,9 @@ void TensorRT::encoderInference(const cv::Mat& img, const std::vector<float>& bo
 {
   processInput(img, bounds, std::string("template"));
 
-  //encoder_buffers_->copyInputToDeviceAsync(cuda_stream_);
   encoder_buffers_->copyInputToDevice();
-
   encoder_context_->executeV2(encoder_buffers_->getDeviceBindings().data());
-  //context_->enqueueV2(encoder_buffers_->getDeviceBindings().data(), cuda_stream_, nullptr);
-
   encoder_buffers_->copyOutputToHost();
-  // encoder_buffers_->copyOutputToHostAsync(cuda_stream_);
-  // cudaStreamSynchronize(cuda_stream_);
-
-  //const float* encoder_memory  = static_cast<const float*>(encoder_buffers_->getHostBuffer(std::string("encoder_memory")));
-  // for(int i = 0; i < transformer_dim_ / 4; i++)
-  //   std::cout << encoder_memory[4*i] << " " << encoder_memory[4*i+1] << " " << encoder_memory[4*i+2] << " " << encoder_memory[4*i+3] << std::endl;
 
   std::string binding_name("encoder_memory");
   std::memcpy(decoder_buffers_->getHostBuffer(binding_name), encoder_buffers_->getHostBuffer(binding_name), encoder_buffers_->size(binding_name));
@@ -385,14 +513,8 @@ void TensorRT::decoderInference(const cv::Mat& img, const std::vector<float>& bo
   processInput(img, bounds, std::string("search"));
 
   decoder_buffers_->copyInputToDevice();
-  //decoder_buffers_->copyInputToDeviceAsync(cuda_stream_);
-
   decoder_context_->executeV2(decoder_buffers_->getDeviceBindings().data());
-  //decoder_context_->enqueueV2(decoder_buffers_->getDeviceBindings().data(), cuda_stream_, nullptr);
-
   decoder_buffers_->copyOutputToHost();
-  // decoder_buffers_->copyOutputToHostAsync(cuda_stream_);
-  // cudaStreamSynchronize(cuda_stream_);
 
   heatmap_ = cv::Mat(cv::Size(search_feat_size_, search_feat_size_), CV_32FC1, decoder_buffers_->getHostBuffer("pred_heatmap"));
   bbox_reg_ = cv::Mat(cv::Size(search_feat_size_, search_feat_size_), CV_32FC2, decoder_buffers_->getHostBuffer("pred_bbox_reg"));
@@ -449,7 +571,6 @@ bool ONNX::loadModels(std::string encoder_model_file, std::string decoder_model_
   // https://github.com/microsoft/onnxruntime/blob/master/csharp/test/Microsoft.ML.OnnxRuntime.EndToEndTests.Capi/CXX_Api_Sample.cpp
   env_ = Ort::Env(ORT_LOGGING_LEVEL_WARNING, "TrTr Tracker");
   Ort::SessionOptions options;
-  //options.SetGraphOptimizationLevel(ORT_ENABLE_BASIC); // no improvement, and become worse!
 
   encoder_session_ = std::make_shared<Ort::Session>(env_, encoder_model_file.c_str(), options);
   decoder_session_ = std::make_shared<Ort::Session>(env_, decoder_model_file.c_str(), options);
@@ -458,16 +579,12 @@ bool ONNX::loadModels(std::string encoder_model_file, std::string decoder_model_
   for (int i = 0; i < num_input_nodes; i++)
     {
       std::string input_name(encoder_session_->GetInputName(i, allocator_));
-      std::cout << "Input name = " << input_name << ": ";
 
       Ort::TypeInfo type_info = encoder_session_->GetInputTypeInfo(i);
       auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
 
       std::vector<int64_t> input_node_dims;
       input_node_dims = tensor_info.GetShape();
-      std::cout << "[";
-      for (auto dim:  input_node_dims) std::cout << dim << ", ";
-      std::cout << "]" << std::endl;
 
       if(input_name == std::string("template_image"))
         {
@@ -489,16 +606,12 @@ bool ONNX::loadModels(std::string encoder_model_file, std::string decoder_model_
   for (int i = 0; i < num_output_nodes; i++)
     {
       std::string output_name(encoder_session_->GetOutputName(i, allocator_));
-      std::cout << "Output name = " << output_name << ": ";
 
       Ort::TypeInfo type_info = encoder_session_->GetOutputTypeInfo(i);
       auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
 
       std::vector<int64_t> output_node_dims;
       output_node_dims = tensor_info.GetShape();
-      std::cout << "[";
-      for (auto dim:  output_node_dims) std::cout << dim << ", ";
-      std::cout << "]" << std::endl;
 
       encoder_output_names_.push_back(encoder_session_->GetOutputName(i, allocator_));
       encoder_output_index_map_.insert(std::make_pair(output_name, i));
@@ -508,16 +621,13 @@ bool ONNX::loadModels(std::string encoder_model_file, std::string decoder_model_
   for (int i = 0; i < num_input_nodes; i++)
     {
       std::string input_name(decoder_session_->GetInputName(i, allocator_));
-      std::cout << "Input name = " << input_name << ": ";
 
       Ort::TypeInfo type_info = decoder_session_->GetInputTypeInfo(i);
       auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
 
       std::vector<int64_t> input_node_dims;
       input_node_dims = tensor_info.GetShape();
-      std::cout << "[";
-      for (auto dim:  input_node_dims) std::cout << dim << ", ";
-      std::cout << "]" << std::endl;
+
 
       if(input_name == std::string("search_image"))
         search_img_size_ = (int)input_node_dims.at(1);
@@ -533,16 +643,11 @@ bool ONNX::loadModels(std::string encoder_model_file, std::string decoder_model_
   for (int i = 0; i < num_output_nodes; i++)
     {
       std::string output_name(decoder_session_->GetOutputName(i, allocator_));
-      std::cout << "Output name = " << output_name << ": ";
 
       Ort::TypeInfo type_info = decoder_session_->GetOutputTypeInfo(i);
       auto tensor_info = type_info.GetTensorTypeAndShapeInfo();
-
       std::vector<int64_t> output_node_dims;
       output_node_dims = tensor_info.GetShape();
-      std::cout << "[";
-      for (auto dim:  output_node_dims) std::cout << dim << ", ";
-      std::cout << "]" << std::endl;
 
       decoder_output_names_.push_back(decoder_session_->GetOutputName(i, allocator_));
       decoder_output_index_map_.insert(std::make_pair(output_name, i));
@@ -557,14 +662,10 @@ void ONNX::encoderInference(const cv::Mat& img, const std::vector<float>& bounds
 
   auto output_tensors = encoder_session_->Run(Ort::RunOptions{nullptr},
                                               encoder_input_names_.data(),
-                                              encoder_input_tensors_.data(), // ort_inputs.data(),
+                                              encoder_input_tensors_.data(),
                                               encoder_input_names_.size(),
                                               encoder_output_names_.data(),
                                               encoder_output_names_.size());
-
-  // const float* encoder_memory = output_tensors.front().GetTensorData<float>();
-  // for(int i = 0; i < transformer_dim_ / 4; i++)
-  //   std::cout << encoder_memory[4*i] << " " << encoder_memory[4*i+1] << " " << encoder_memory[4*i+2] << " " << encoder_memory[4*i+3] << std::endl;
 
 
   int index = decoder_input_index_map_.at(std::string("encoder_memory"));
@@ -608,12 +709,6 @@ void ONNX::processInput(const cv::Mat& img, const std::vector<float>& bounds, co
   if(image_type == std::string("template"))
     {
       p = encoder_input_tensors_.at(encoder_input_index_map_.at(image_type + std::string("_image"))).GetTensorMutableData<float>();
-      // auto tensor_info = encoder_input_tensors_.at(encoder_input_index_map_.at(image_type + std::string("_image"))).GetTensorTypeAndShapeInfo();
-      // std::vector<int64_t> output_node_dims;
-      // output_node_dims = tensor_info.GetShape();
-      // std::cout << "[";
-      // for (auto dim:  output_node_dims) std::cout << dim << ", ";
-      // std::cout << "]" << std::endl;
     }
   if(image_type == std::string("search"))
     p = decoder_input_tensors_.at(decoder_input_index_map_.at(image_type + std::string("_image"))).GetTensorMutableData<float>();
@@ -665,9 +760,6 @@ void ONNX::processInput(const cv::Mat& img, const std::vector<float>& bounds, co
 
           std::memcpy(encoder_input_tensors_.at(index).GetTensorMutableData<void>(),
                       (void*)default_template_pos_embed_.data, size);
-
-          // for(int i = 0; i < transformer_dim_ / 4; i++)
-          //   std::cout << encoder_input_tensors_.at(index).GetTensorData<float>()[4*i] << " " << encoder_input_tensors_.at(index).GetTensorData<float>()[4*i+1] << " " << encoder_input_tensors_.at(index).GetTensorData<float>()[4*i+2] << " " << encoder_input_tensors_.at(index).GetTensorData<float>()[4*i+3] << std::endl;
        }
 
       if(image_type == std::string("search"))
@@ -681,144 +773,5 @@ void ONNX::processInput(const cv::Mat& img, const std::vector<float>& bounds, co
 }
 #endif
 
-int main (int argc, char **argv)
-{
-  ros::init (argc, argv, "trtr_tracker");
-
-  ros::NodeHandle nh;
-  ros::NodeHandle nhp("~");
-
-  std::string encoder_model_file;
-  nhp.param ("encoder_model_file", encoder_model_file, std::string("model.trt"));
-
-  std::string decoder_model_file;
-  nhp.param ("decoder_model_file", decoder_model_file, std::string("model.trt"));
-
-  std::string img_dir;
-  nhp.param ("image_dir", img_dir, std::string(""));
-
-  std::string gt_file;
-  nhp.param ("gt_file", gt_file, std::string(""));
-
-  // hyper-parameter for postprocess
-  // following default values are fine-tuned with various tracker benchmark.
-  double cosine_window_factor, size_lpf_factor, score_threshold;
-  int cosine_window_step;
-  nhp.param ("cosine_window_factor", cosine_window_factor, 0.4);
-  nhp.param ("cosine_window_step", cosine_window_step, 3);
-  nhp.param ("size_lpf_factor", size_lpf_factor, 0.8);
-  nhp.param ("score_threshold", score_threshold, 0.05);
-
-  int device; // 0: cpu, 1: gpu
-  nhp.param ("device", device, 1);
-
-#if !defined(TENSORRT) && !defined(ONNXRT)
-  ROS_FATAL("do not have tensorRT nor onnx, can not do inference");
-  return 0;
-#endif
-
-#if !defined(TENSORRT)
-  if(device == 1)
-    {
-      ROS_FATAL("can only support CPU model");
-      return 0;
-    }
-#endif
-
-#if !defined(ONNXRT)
-  if(device == 0)
-    {
-      ROS_FATAL("can only support GPU model");
-      return 0;
-    }
-#endif
-
-  std::shared_ptr<Base> tracker;
-#ifdef ONNXRT
-  if(device == 0)  tracker = std::make_shared<ONNX>();
-#endif
-
-#ifdef TENSORRT
-  if(device == 1)  tracker = std::make_shared<TensorRT>();
-#endif
-
-  // initialize
-  if(!tracker->init(encoder_model_file, decoder_model_file, score_threshold, cosine_window_factor, cosine_window_step, size_lpf_factor)) return 0;
-
-  fs::path path(img_dir);
-
-  std::vector<fs::path> img_files;
-  for (const auto& e : boost::make_iterator_range(fs::directory_iterator( path ), { }))
-        if ( ! fs::is_directory( e ) )
-          img_files.push_back(e.path());
-  std::sort(img_files.begin(), img_files.end(),
-            [](const fs::path &a, const fs::path &b){ return atoi(a.stem().string().c_str()) < atoi(b.stem().string().c_str()); });
-
-  // ground truth img
-  std::ifstream ifs(gt_file);
-  std::vector< std::vector<float> > gt_bboxes;
-  if (ifs)
-    {
-      while (!ifs.eof())
-        {
-          std::string buf;
-          std::string buf2;
-          std::vector<float> gt_bbox;
-          std::getline(ifs, buf);
-
-          std::stringstream ss{buf};
-
-          if (buf.empty()) continue;
-          while(std::getline(ss, buf2, ','))
-            {
-              gt_bbox.push_back(atof(buf2.c_str()));
-            }
-
-          gt_bboxes.push_back(gt_bbox);
-        }
-
-      double sum_t = 0;
-      for(int i = 0; i < img_files.size(); i++)
-        {
-          //std::cout << img_files.at(i).string() << std::endl;
-          cv::Mat img = cv::imread(img_files.at(i).string());
-
-          if(i == 0)
-            {
-              tracker->reset(gt_bboxes.at(0), img);
-              continue;
-            }
-          else
-            {
-              auto start_t = ros::Time::now().toSec();
-              tracker->track(img);
-              double t = ros::Time::now().toSec() - start_t;
-              sum_t += t;
-              //std::cout <<  << std::endl;
-            }
-
-          cv::rectangle(img,
-                        tracker->getBboxLT(), tracker->getBboxRB(),
-                        cv::Scalar(0,255,255),3,4);
-
-          if (gt_bboxes.size() > i)
-            {
-              auto gt_bbox = gt_bboxes.at(i);
-              cv::rectangle(img,
-                            cv::Point(gt_bbox.at(0), gt_bbox.at(1)),
-                            cv::Point(gt_bbox.at(0) + gt_bbox.at(2), gt_bbox.at(1) + gt_bbox.at(3)),
-                            cv::Scalar(0,255,0),3,4);
-            }
-
-          cv::imshow("result", img);
-          auto k = cv::waitKey(10);
-
-          if(k == 27) break;
-
-        }
-
-      std::cout << (img_files.size() - 1) / sum_t << " FPS" <<std::endl;
-    }
-
-  return 0;
-}
+#include <pluginlib/class_list_macros.h>
+PLUGINLIB_EXPORT_CLASS(jsk_perception::TrTrTrackerRos, nodelet::Nodelet);

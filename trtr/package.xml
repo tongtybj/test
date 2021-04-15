@@ -28,6 +28,11 @@
   <!-- <author email="jane.doe@example.com">Jane Doe</author> -->
 
   <buildtool_depend>catkin</buildtool_depend>
+  <depend>jsk_recognition_msgs</depend>
+  <depend>jsk_topic_tools</depend>
+  <depend>image_transport</depend>
+  <depend>nodelet</depend>
+
   <build_depend>cv_bridge</build_depend>
   <build_depend>roscpp</build_depend>
   <build_depend>rospy</build_depend>
@@ -41,10 +46,8 @@
   <exec_depend>jsk_data</exec_depend>
   <exec_depend>python-gdown-pip</exec_depend>
 
-
-  <!-- The export tag contains other, unspecified, tags -->
   <export>
-    <!-- Other tools can request additional information be placed here -->
-
+    <nodelet plugin="${prefix}/plugins/nodelet/trtr_nodelet.xml"/>
   </export>
+
 </package>

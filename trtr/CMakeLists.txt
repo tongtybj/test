@@ -11,6 +11,10 @@ find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   roscpp
   rospy
+  image_transport
+  jsk_recognition_msgs
+  jsk_topic_tools
+  nodelet
 )
 
 find_package(OpenCV REQUIRED)
@@ -57,6 +61,7 @@ find_package_handle_standard_args(
 if(NOT TENSORRT_FOUND)
   MESSAGE(WARNING "Cannot find TensorRT library.")
   set(TENSORRT_LIBRARY) # reset this variable
+  set(TENSORRT_SOURCES)
 else()
   # check tensor version
   file(STRINGS "${TENSORRT_INCLUDE_DIR}/NvInferVersion.h" VERSION_STRINGS REGEX "#define NV_TENSORRT_.*")
@@ -70,6 +75,8 @@ else()
     message(FATAL_ERROR "We find a TensorRT of ${TRT_VERSION} . please install version >= 7.2.2")
   endif()
   add_definitions(-DTENSORRT)
+
+  set(TENSORRT_SOURCES ${TENSORRT_SAMPLE_INCLUDE_DIR}/logger.cpp)
 endif()
 
 execute_process(
@@ -152,5 +159,14 @@ ${CUDA_INCLUDE_DIR}
 ${ONNXRT_INCLUDE_DIR}
 )
 
-add_executable(trtr_tracker_node src/trtr_tracker.cpp ${TENSORRT_SAMPLE_INCLUDE_DIR}/logger.cpp)
-target_link_libraries (trtr_tracker_node ${catkin_LIBRARIES} ${TENSORRT_LIBRARY} ${CUDA_LIBRARY} ${OpenCV_LIBRARIES} ${Boost_LIBRARIES} ${ONNXRT_LIBRARY})
+macro(arp_add_nodelet _nodelet_cpp _nodelet_class _single_nodelet_exec_name)
+  jsk_nodelet(${_nodelet_cpp} ${_nodelet_class} ${_single_nodelet_exec_name}
+    ${PROJECT_NAME}_nodelet_sources ${PROJECT_NAME}_nodelet_executables)
+endmacro()
+
+arp_add_nodelet(src/trtr_tracker.cpp "jsk_perception/TrTrTrackerRos" "trtr_tracker")
+
+add_library(${PROJECT_NAME} SHARED ${trtr_nodelet_sources} ${TENSORRT_SOURCES})
+target_link_libraries (${PROJECT_NAME} ${catkin_LIBRARIES} ${TENSORRT_LIBRARY} ${CUDA_LIBRARY} ${OpenCV_LIBRARIES} ${Boost_LIBRARIES} ${ONNXRT_LIBRARY})
+
+
