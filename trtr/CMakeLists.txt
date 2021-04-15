@@ -51,7 +51,7 @@ find_library(TENSORRT_LIBRARY_MYELIN myelin
   HINTS  ${TENSORRT_ROOT} ${TENSORRT_BUILD} ${CUDA_TOOLKIT_ROOT_DIR}
   PATH_SUFFIXES lib lib64 lib/x64)
 set(TENSORRT_LIBRARY ${TENSORRT_LIBRARY_INFER} ${TENSORRT_LIBRARY_INFER_PLUGIN} ${TENSORRT_LIBRARY_MYELIN})
-MESSAGE(Status "Find TensorRT libs at ${TENSORRT_LIBRARY}")
+MESSAGE(STATUS "Find TensorRT libs at ${TENSORRT_LIBRARY}")
 find_package_handle_standard_args(
   TENSORRT DEFAULT_MSG TENSORRT_INCLUDE_DIR TENSORRT_LIBRARY)
 if(NOT TENSORRT_FOUND)
@@ -64,7 +64,7 @@ else()
     string(REGEX MATCH "[0-9]" TRT_${TYPE} ${TRT_TYPE_STRING})
   endforeach(TYPE)
   set(TRT_VERSION "${TRT_MAJOR}.${TRT_MINOR}.${TRT_PATCH}" CACHE STRING "TensorRT project version")
-  MESSAGE(SATUS "Building for TensorRT version: ${TRT_VERSION}")
+  MESSAGE(STATUS "Building for TensorRT version: ${TRT_VERSION}")
   if(TRT_VERSION VERSION_LESS 7.2.2)
     message(FATAL_ERROR "We find a TensorRT of ${TRT_VERSION} . please install version >= 7.2.2")
   endif()
@@ -82,7 +82,6 @@ if(${ARCH} STREQUAL "x86_64")
   set(ONNXRT_VERSION 1.6.0)
   set(ONNXRT_DIR onnxruntime-linux-x64-${ONNXRT_VERSION})
 
-  message(${PROJECT_SOURCE_DIR})
   find_path(ONNXRT_INCLUDE_DIR onnxruntime_cxx_api.h
     HINTS ${CMAKE_CURRENT_BINARY_DIR}/${ONNXRT}
     PATH_SUFFIXES include)
@@ -92,8 +91,8 @@ if(${ARCH} STREQUAL "x86_64")
     PATH_SUFFIXES lib)
   MESSAGE(STATUS "ONNXRT_LIBRARY_INFER at ${ONNXRT_LIBRARY}")
   find_package_handle_standard_args(
-    ONNXTR_FOUND DEFAULT_MSG ONNXRT_INCLUDE_DIR ONNXRT_LIBRARY)
-  if(NOT ONNXTR_FOUND)
+    ONNXRT DEFAULT_MSG ONNXRT_INCLUDE_DIR ONNXRT_LIBRARY)
+  if(NOT ONNXRT_FOUND)
     MESSAGE("Download ONNX RUNTIME library")
     set(ONNXRT_URL https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRT_VERSION}/${ONNXRT_DIR}.tgz) # we only test with v1.6.0
     file(DOWNLOAD ${ONNXRT_URL} ${CMAKE_CURRENT_BINARY_DIR}/${ONNXRT_DIR}.tgz
@@ -105,12 +104,23 @@ if(${ARCH} STREQUAL "x86_64")
     find_path(ONNXRT_INCLUDE_DIR onnxruntime_cxx_api.h
       HINTS ${CMAKE_CURRENT_BINARY_DIR}/${ONNXRT_DIR}
       PATH_SUFFIXES include)
-    MESSAGE("Found ONNXRuntime headers at ${ONNXRT_INCLUDE_DIR}")
+    MESSAGE(STATUS "Found ONNXRuntime headers at ${ONNXRT_INCLUDE_DIR}")
     find_library(ONNXRT_LIBRARY onnxruntime
       HINTS ${CMAKE_CURRENT_BINARY_DIR}/${ONNXRT_DIR}
       PATH_SUFFIXES lib)
-    MESSAGE("ONNXRT_LIBRARY_INFER at ${ONNXRT_LIBRARY}")
+    MESSAGE(STATUS "Found ONNXRT_LIBRARY_INFER at ${ONNXRT_LIBRARY}")
   endif()
+endif()
+
+add_custom_target(install_tracker_models ALL
+  COMMAND ${PROJECT_SOURCE_DIR}/scripts/install_tracker_models.py)
+
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/models/trtr_resnet50_decoder_fp16.trt")
+  MESSAGE("Download and convert inference models, this may takes more than 5 min. Please patiently wait")
+  add_custom_target(convert_trtr_models ALL
+    COMMAND ${PROJECT_SOURCE_DIR}/scripts/convert_trtr_models.sh
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    DEPENDS install_tracker_models)
 endif()
 
 ###################################
