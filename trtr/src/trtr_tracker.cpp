@@ -718,7 +718,7 @@ int main (int argc, char **argv)
 #endif
 
 #if !defined(TENSORRT)
-  if(device == 0)
+  if(device == 1)
     {
       ROS_FATAL("can only support CPU model");
       return 0;
@@ -726,7 +726,7 @@ int main (int argc, char **argv)
 #endif
 
 #if !defined(ONNXRT)
-  if(device == 1)
+  if(device == 0)
     {
       ROS_FATAL("can only support GPU model");
       return 0;

@@ -56,6 +56,7 @@ find_package_handle_standard_args(
   TENSORRT DEFAULT_MSG TENSORRT_INCLUDE_DIR TENSORRT_LIBRARY)
 if(NOT TENSORRT_FOUND)
   MESSAGE(WARNING "Cannot find TensorRT library.")
+  set(TENSORRT_LIBRARY) # reset this variable
 else()
   # check tensor version
   file(STRINGS "${TENSORRT_INCLUDE_DIR}/NvInferVersion.h" VERSION_STRINGS REGEX "#define NV_TENSORRT_.*")
@@ -115,7 +116,7 @@ endif()
 add_custom_target(install_tracker_models ALL
   COMMAND ${PROJECT_SOURCE_DIR}/scripts/install_tracker_models.py)
 
-if(NOT EXISTS "${PROJECT_SOURCE_DIR}/models/trtr_resnet50_decoder_fp16.trt")
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/models/trtr_resnet50_decoder_fp16.trt" AND TENSORRT_FOUND)
   MESSAGE("Download and convert inference models, this may takes more than 5 min. Please patiently wait")
   add_custom_target(convert_trtr_models ALL
     COMMAND ${PROJECT_SOURCE_DIR}/scripts/convert_trtr_models.sh
