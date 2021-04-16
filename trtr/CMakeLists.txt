@@ -121,7 +121,7 @@ if(${ARCH} STREQUAL "x86_64")
 endif()
 
 add_custom_target(install_test_data ALL
-  COMMAND ${PROJECT_SOURCE_DIR}/scripts/download_otb_benchmark.py)
+  COMMAND ${PROJECT_SOURCE_DIR}/scripts/install_sample_data.py)
 
 add_custom_target(install_tracker_models ALL
   COMMAND ${PROJECT_SOURCE_DIR}/scripts/install_tracker_models.py)
