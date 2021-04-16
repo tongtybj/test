@@ -120,6 +120,9 @@ if(${ARCH} STREQUAL "x86_64")
   endif()
 endif()
 
+add_custom_target(install_test_data ALL
+  COMMAND ${PROJECT_SOURCE_DIR}/scripts/download_otb_benchmark.py)
+
 add_custom_target(install_tracker_models ALL
   COMMAND ${PROJECT_SOURCE_DIR}/scripts/install_tracker_models.py)
 
@@ -169,4 +172,8 @@ arp_add_nodelet(src/trtr_tracker.cpp "jsk_perception/TrTrTrackerRos" "trtr_track
 add_library(${PROJECT_NAME} SHARED ${trtr_nodelet_sources} ${TENSORRT_SOURCES})
 target_link_libraries (${PROJECT_NAME} ${catkin_LIBRARIES} ${TENSORRT_LIBRARY} ${CUDA_LIBRARY} ${OpenCV_LIBRARIES} ${Boost_LIBRARIES} ${ONNXRT_LIBRARY})
 
+if(CATKIN_ENABLE_TESTING)
+  find_package(catkin REQUIRED COMPONENTS rostest)
+  add_subdirectory(test)
+endif()
 
